@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Anchor Selection Studio</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -340,10 +341,12 @@
             </div>
             <div class="map-switches">
               <label class="check compact-map"><input id="show-site-marker" type="checkbox" checked> Site marker</label>
-              <label class="check compact-map"><input id="show-coastline" type="checkbox" checked> Coastline</label>
+              <label class="check compact-map"><input id="show-coastline" type="checkbox" checked> Basemap</label>
             </div>
           </div>
-          <svg id="map-svg" role="img" aria-label="Anchor result map"></svg>
+          <div id="leaflet-map" class="leaflet-map" role="img" aria-label="Interactive anchor result map"></div>
+          <div id="map-fallback-note" class="map-fallback-note" hidden>Interactive basemap is unavailable, so the export plot is shown instead.</div>
+          <svg id="map-svg" class="map-export-svg" role="img" aria-label="Anchor result export plot"></svg>
           <div id="map-legend" class="legend"></div>
           <div id="map-note" class="chart-note"></div>
         </div>
@@ -563,6 +566,7 @@
     <span>NC State logo source: <a href="https://brand.ncsu.edu/downloads/" target="_blank" rel="noopener">official brand downloads</a>. Confirm authorization for public institutional use.</span>
   </footer>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>

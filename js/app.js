@@ -63,6 +63,11 @@ let lastSiteSignature = "";
 let siteInputsDirty = false;
 let mapMode = "anchor";
 let selectedMapRowIndex = -1;
+let leafletMap = null;
+let leafletTileLayer = null;
+let leafletScanLayer = null;
+let leafletSiteLayer = null;
+let leafletMarkers = [];
 
 const DEFAULT_HELP = "Hover or focus an option to see guidance.";
 
@@ -133,7 +138,7 @@ const HELP_TEXT = {
   "map-mode-depth": "Color map points by water depth.",
   "map-mode-feasible": "Color map points by feasibility status.",
   "show-site-marker": "Show the current single-site latitude and longitude on the CSV map.",
-  "show-coastline": "Show a lightweight coastline reference for US East and Gulf Coast scans.",
+  "show-coastline": "Show the interactive public basemap behind CSV scan markers.",
   "download-map-png": "Download the current map view as a PNG image.",
   "download-map-svg": "Download the current map view as an SVG file.",
   "run-array": "Run the farm-level array comparison for non-shared and shared anchoring.",
@@ -542,11 +547,171 @@ function bestMapRowIndex(rows) {
   return feasible.length ? feasible[0].index : (rows.length ? 0 : -1);
 }
 
-function renderCsvMapViews() {
+function ensureInteractiveMap() {
+  const el = $("#leaflet-map");
+  const fallbackNote = $("#map-fallback-note");
+  const svg = $("#map-svg");
+  const L = window.L;
+  if (!el || !L) {
+    if (el) el.hidden = true;
+    if (fallbackNote) fallbackNote.hidden = false;
+    if (svg) svg.classList.add("is-fallback");
+    return false;
+  }
+  el.hidden = false;
+  if (fallbackNote) fallbackNote.hidden = true;
+  if (svg) svg.classList.remove("is-fallback");
+  if (!leafletMap) {
+    leafletMap = L.map(el, {
+      preferCanvas: true,
+      scrollWheelZoom: false,
+      zoomControl: true
+    }).setView([numberValue("site-lat", 35), numberValue("site-lon", -75)], 6);
+    leafletTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "&copy; OpenStreetMap contributors"
+    });
+    leafletTileLayer.addTo(leafletMap);
+    L.control.scale({ imperial: false }).addTo(leafletMap);
+  }
+  if (leafletTileLayer) {
+    const hasTile = leafletMap.hasLayer(leafletTileLayer);
+    if (checked("show-coastline") && !hasTile) leafletTileLayer.addTo(leafletMap);
+    if (!checked("show-coastline") && hasTile) leafletMap.removeLayer(leafletTileLayer);
+  }
+  window.setTimeout(() => leafletMap.invalidateSize(), 0);
+  return true;
+}
+
+function leafletPointStyle(row, ranges, index, count) {
+  const cost = row.TotalCost_USD_per_kW;
+  const norm = normalizeValue(cost, ranges.cost);
+  const selected = index === selectedMapRowIndex;
+  return {
+    radius: count > 2500 ? 4 : 5 + 6 * norm,
+    color: selected ? "#172026" : "#ffffff",
+    weight: selected ? 3 : 1.2,
+    fillColor: mapPointColor(row, ranges),
+    fillOpacity: row.Status === "OK" ? 0.82 : 0.52,
+    opacity: 1
+  };
+}
+
+function leafletPopupHtml(row) {
+  const lcoeText = Number.isFinite(row.MooringAnchorLCOE_USD_per_MWh) ? `${formatMoney(row.MooringAnchorLCOE_USD_per_MWh, 2)}/MWh` : "Disabled";
+  return `
+    <div class="map-popup">
+      <strong>${escapeHtml(row.BestAnchorType || "No feasible")} ${escapeHtml(row.BestVariant || "")}</strong>
+      <dl>
+        <dt>Location</dt><dd>${escapeHtml(formatNumber(row.Lat, 4))}, ${escapeHtml(formatNumber(row.Lon, 4))}</dd>
+        <dt>Depth</dt><dd>${escapeHtml(formatNumber(row.WaterDepth_m, 1))} m</dd>
+        <dt>Soil</dt><dd>${escapeHtml(row.SoilType || "Unknown")}</dd>
+        <dt>Total</dt><dd>${escapeHtml(formatMoney(row.TotalSystemCost_USD))}</dd>
+        <dt>USD/kW</dt><dd>${escapeHtml(formatMoney(row.TotalCost_USD_per_kW, 2))}</dd>
+        <dt>LCOE</dt><dd>${escapeHtml(lcoeText)}</dd>
+        <dt>Status</dt><dd>${escapeHtml(row.Status || "Unknown")}</dd>
+      </dl>
+    </div>
+  `;
+}
+
+function updateLeafletSelection(openPopup = false) {
+  if (!leafletMarkers.length) return;
+  const ranges = {
+    cost: valueRange(scanRows, "TotalCost_USD_per_kW"),
+    depth: valueRange(scanRows, "WaterDepth_m")
+  };
+  leafletMarkers.forEach(item => {
+    item.marker.setStyle(leafletPointStyle(item.row, ranges, item.index, scanRows.length));
+    if (item.index === selectedMapRowIndex) {
+      item.marker.bringToFront();
+      if (openPopup) item.marker.openPopup();
+    }
+  });
+}
+
+function selectMapRow(index, openPopup = false) {
+  if (!scanRows[index]) return;
+  selectedMapRowIndex = index;
+  renderMapSiteDetail(scanRows[index]);
+  renderMap($("#map-svg"), scanRows);
+  updateLeafletSelection(openPopup);
+}
+
+function renderInteractiveMap(rows, options = {}) {
+  if (!ensureInteractiveMap()) return;
+  const L = window.L;
+  if (leafletScanLayer) leafletMap.removeLayer(leafletScanLayer);
+  if (leafletSiteLayer) leafletMap.removeLayer(leafletSiteLayer);
+  leafletScanLayer = L.layerGroup().addTo(leafletMap);
+  leafletSiteLayer = L.layerGroup().addTo(leafletMap);
+  leafletMarkers = [];
+  if (!rows.length) return;
+  const ranges = {
+    cost: valueRange(rows, "TotalCost_USD_per_kW"),
+    depth: valueRange(rows, "WaterDepth_m")
+  };
+  const bounds = L.latLngBounds([]);
+  rows.forEach((row, index) => {
+    if (!Number.isFinite(row.Lat) || !Number.isFinite(row.Lon)) return;
+    const latLng = [row.Lat, row.Lon];
+    const norm = normalizeValue(row.TotalCost_USD_per_kW, ranges.cost);
+    if (mapMode === "cost") {
+      L.circleMarker(latLng, {
+        radius: rows.length > 2500 ? 8 : 14 + 14 * norm,
+        color: mapPointColor(row, ranges),
+        weight: 0,
+        fillColor: mapPointColor(row, ranges),
+        fillOpacity: 0.17,
+        interactive: false
+      }).addTo(leafletScanLayer);
+    }
+    const marker = L.circleMarker(latLng, leafletPointStyle(row, ranges, index, rows.length))
+      .bindPopup(leafletPopupHtml(row))
+      .addTo(leafletScanLayer);
+    marker.on("click", () => {
+      selectMapRow(index, true);
+      setStatus("Map site selected.");
+    });
+    leafletMarkers.push({ marker, row, index });
+    bounds.extend(latLng);
+  });
+
+  if (checked("show-site-marker")) {
+    const lat = numberValue("site-lat", NaN);
+    const lon = numberValue("site-lon", NaN);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      const site = L.circleMarker([lat, lon], {
+        radius: 8,
+        color: "#cc0000",
+        weight: 3,
+        fillColor: "#ffffff",
+        fillOpacity: 0.95
+      }).bindPopup(`Single-site input<br>${formatNumber(lat, 4)}, ${formatNumber(lon, 4)}`).addTo(leafletSiteLayer);
+      L.circle([lat, lon], {
+        radius: 9000,
+        color: "#cc0000",
+        weight: 1.5,
+        fillOpacity: 0.04,
+        interactive: false
+      }).addTo(leafletSiteLayer);
+      bounds.extend(site.getLatLng());
+    }
+  }
+
+  updateLeafletSelection(false);
+  if (options.fitMap && bounds.isValid()) {
+    leafletMap.fitBounds(bounds.pad(0.22), { maxZoom: rows.length === 1 ? 9 : 8 });
+  }
+  window.setTimeout(() => leafletMap.invalidateSize(), 0);
+}
+
+function renderCsvMapViews(options = {}) {
   const distribution = anchorDistribution(scanRows);
   renderDistribution($("#distribution-chart"), distribution);
   renderMapLegend(scanRows);
   renderMap($("#map-svg"), scanRows);
+  renderInteractiveMap(scanRows, options);
   renderMapNote(scanRows);
   renderMapSiteDetail(scanRows[selectedMapRowIndex]);
   updateMapModeButtons();
@@ -709,7 +874,7 @@ function runCsvScan() {
       { label: "Unknown soil", value: scan.removed.unknownSoil.toLocaleString() },
       { label: "Source mode", value: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan" }
     ]);
-    renderCsvMapViews();
+    renderCsvMapViews({ fitMap: true });
     renderTable($("#csv-table"), scanRows, [
       { key: "Lat", label: "Lat", format: v => formatNumber(v, 4) },
       { key: "Lon", label: "Lon", format: v => formatNumber(v, 4) },
