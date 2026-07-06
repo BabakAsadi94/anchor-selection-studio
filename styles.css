@@ -917,6 +917,12 @@ svg {
   color: var(--ncsu-red-dark);
 }
 
+.guide-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -936,6 +942,11 @@ svg {
   border: 1px solid #c6dce2;
   border-left: 4px solid var(--ocean);
   border-radius: 8px;
+}
+
+.guide-answer:focus {
+  outline: 2px solid rgba(204, 0, 0, 0.22);
+  outline-offset: 2px;
 }
 
 .method-grid {

@@ -460,6 +460,7 @@
         <textarea id="ask-guide-input" rows="4" aria-label="Ask Guide question" placeholder="Ask a question, for example: How do I run the analysis? What does DEA mean? How do I download a PDF report?"></textarea>
         <div class="question-chips">
           <button class="question-chip" type="button" data-question="How do I run a single-site analysis?">Run analysis</button>
+          <button class="question-chip" type="button" data-question="How do I run multi-site analysis?">Multi-site</button>
           <button class="question-chip" type="button" data-question="How do I know the result worked?">Know it worked</button>
           <button class="question-chip" type="button" data-question="How do I download a PDF report?">PDF report</button>
           <button class="question-chip" type="button" data-question="What does the recommended anchor mean?">Recommended anchor</button>
@@ -467,7 +468,8 @@
         <div class="actions">
           <button id="ask-guide-run" class="primary" type="button">Ask</button>
         </div>
-        <div id="ask-guide-answer" class="guide-answer" aria-live="polite">Ask a question or choose an example above.</div>
+        <div id="ask-guide-meta" class="guide-meta">Type a question and press Ask. Press Enter to ask, or Shift+Enter for a new line.</div>
+        <div id="ask-guide-answer" class="guide-answer" aria-live="polite" tabindex="-1">Ask a question or choose an example above.</div>
       </section>
       <section class="guide-grid">
         <article class="guide-card">

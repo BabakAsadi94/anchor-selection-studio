@@ -1114,6 +1114,21 @@ function answerGuideQuestion(rawQuestion) {
       "If you changed inputs, click Run Site again. If nothing changed, the previous result is already the current result."
     ].join("\n");
   }
+  if (/(multi[-\s]?site|multiple[-\s]?site|many sites|site batch|batch sites|regional|csv|map|upload|sample|site scan)/.test(text)) {
+    return [
+      "To run multi-site analysis, use CSV Site Scan:",
+      "1. Open the CSV tab.",
+      "2. Upload a CSV with site coordinates, water depth, and sediment columns, or click Sample for the built-in demo data.",
+      "3. Choose CSV source mode: Map scan evaluates all retained rows; Nearest site keeps the closest retained row to the current latitude and longitude.",
+      "4. Set the bounding box, depth filters, and max rows.",
+      "5. Click Run.",
+      "6. Review the map, anchor distribution, metrics, and results table. Use Download to export the scan table.",
+      "",
+      "Expected columns: Latitude, Longitude, WaterDepth, Gravel, Sand, Mud, Clay, FolkCde.",
+      "",
+      context
+    ].join("\n");
+  }
   if (/(run|start|analysis|analyze|analyse|site)/.test(text)) {
     return [
       "To run a single-site analysis:",
@@ -1149,18 +1164,6 @@ function answerGuideQuestion(rawQuestion) {
       "The app checks soil compatibility, load angle, holding capacity, geometry, vessel crane limits, fabrication/install cost, and optional mooring cost.",
       "",
       context
-    ].join("\n");
-  }
-  if (/(csv|map|upload|sample|regional|site scan)/.test(text)) {
-    return [
-      "For CSV scans:",
-      "1. Open the CSV tab.",
-      "2. Upload a CSV or click Sample.",
-      "3. Use the bounding box and depth filters.",
-      "4. Click Run.",
-      "5. Review map, anchor distribution, and result table.",
-      "",
-      "Expected columns: Latitude, Longitude, WaterDepth, Gravel, Sand, Mud, Clay, FolkCde."
     ].join("\n");
   }
   if (/(array|shared|farm|spacing)/.test(text)) {
@@ -1206,7 +1209,13 @@ function answerGuideQuestion(rawQuestion) {
 
 function runAskGuide() {
   const question = value("ask-guide-input");
-  $("#ask-guide-answer").textContent = answerGuideQuestion(question);
+  const answer = $("#ask-guide-answer");
+  const meta = $("#ask-guide-meta");
+  if (!answer) return;
+  answer.textContent = answerGuideQuestion(question);
+  answer.focus({ preventScroll: true });
+  answer.scrollIntoView({ block: "nearest" });
+  if (meta) meta.textContent = `Answered at ${new Date().toLocaleTimeString()}.`;
   setStatus("Help answer generated.");
 }
 
