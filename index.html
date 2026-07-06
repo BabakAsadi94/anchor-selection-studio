@@ -29,7 +29,7 @@
         <button class="tab-button" data-target="array-workspace">Array</button>
         <button class="tab-button" data-target="param-workspace">Study</button>
         <button class="tab-button" data-target="report-workspace">Report</button>
-        <button class="tab-button" data-target="guide-workspace">Guide</button>
+        <button class="tab-button" data-target="guide-workspace">Help</button>
         <button class="tab-button" data-target="method-workspace">Method</button>
       </nav>
       <div class="context-help" id="context-help" aria-live="polite">
@@ -39,6 +39,7 @@
       <div class="quick-actions">
         <button id="run-site-top" class="primary" type="button">Run Site</button>
         <button id="open-report-top" type="button">Report</button>
+        <button id="open-help-top" type="button">Help</button>
       </div>
 
       <section class="control-group">
@@ -437,8 +438,40 @@
 
     <section class="workspace" id="guide-workspace">
       <div class="workspace-head">
-        <h2>Guide</h2>
+        <h2>Help & Tutorial</h2>
       </div>
+      <section class="panel tutorial-panel">
+        <div class="tutorial-intro">
+          <strong>How to know the app worked</strong>
+          <p>Run a site case, then check the status line, recommendation card, decision-readiness notes, candidate table, and report export. The calculations run in your browser.</p>
+        </div>
+        <div class="tutorial-steps">
+          <div class="tutorial-step"><span>1</span><strong>Choose inputs</strong><p>Use a preset or set mooring system, load, depth, power, soil, and economics.</p></div>
+          <div class="tutorial-step"><span>2</span><strong>Run analysis</strong><p>Click Run Site. If inputs are unchanged, the app will say the analysis is already up to date.</p></div>
+          <div class="tutorial-step"><span>3</span><strong>Read results</strong><p>Best anchor, total system cost, cost intensity, mass, MBL, UHC, candidate ranking, and rejected checks update in Site.</p></div>
+          <div class="tutorial-step"><span>4</span><strong>Export report</strong><p>Open Report, click Build, then Download PDF or Download HTML.</p></div>
+        </div>
+      </section>
+      <section class="panel ask-panel">
+        <div class="panel-head">
+          <h3>Ask Guide</h3>
+          <span class="help-note">Static helper with ChatGPT handoff</span>
+        </div>
+        <textarea id="ask-guide-input" rows="4" placeholder="Ask a question, for example: How do I run the analysis? What does DEA mean? How do I download a PDF report?"></textarea>
+        <div class="question-chips">
+          <button class="question-chip" type="button" data-question="How do I run a single-site analysis?">Run analysis</button>
+          <button class="question-chip" type="button" data-question="How do I know the result worked?">Know it worked</button>
+          <button class="question-chip" type="button" data-question="How do I download a PDF report?">PDF report</button>
+          <button class="question-chip" type="button" data-question="What does the recommended anchor mean?">Recommended anchor</button>
+          <button class="question-chip" type="button" data-question="Can this app use ChatGPT directly?">GPT connection</button>
+        </div>
+        <div class="actions">
+          <button id="ask-guide-run" class="primary" type="button">Ask Guide</button>
+          <button id="copy-gpt-prompt" type="button">Copy GPT Prompt</button>
+          <button id="open-chatgpt" type="button">Open ChatGPT</button>
+        </div>
+        <div id="ask-guide-answer" class="guide-answer">Ask a question or choose an example above.</div>
+      </section>
       <section class="guide-grid">
         <article class="guide-card">
           <h3>Workflow</h3>

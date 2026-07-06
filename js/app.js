@@ -90,6 +90,7 @@ const HELP_TEXT = {
   "run-site": "Run the single-site anchor selection with the current controls.",
   "run-site-top": "Run the single-site anchor selection from the top of the control panel.",
   "open-report-top": "Open the report workspace for the current analysis.",
+  "open-help-top": "Open the Help page with tutorial steps and the Ask Guide assistant.",
   "download-site": "Download the latest single-site result as JSON.",
   "csv-file": "Upload a CSV with site coordinates, water depth, and sediment columns. Data stays in this browser session.",
   "load-sample": "Load the bundled sample CSV so you can test the scan workflow immediately.",
@@ -129,7 +130,11 @@ const HELP_TEXT = {
   "scenario-array": "Set a practical array demonstration with shared anchoring enabled.",
   "build-report": "Generate an executive summary from the latest site, CSV, array, and study results.",
   "download-report": "Download the generated executive report as a self-contained HTML file.",
-  "download-report-pdf": "Download a PDF summary of the current executive report."
+  "download-report-pdf": "Download a PDF summary of the current executive report.",
+  "ask-guide-input": "Ask a question about how to use the app, interpret results, export reports, or connect to GPT.",
+  "ask-guide-run": "Answer the question using the built-in app guide.",
+  "copy-gpt-prompt": "Copy a detailed ChatGPT prompt with the current app context.",
+  "open-chatgpt": "Open ChatGPT in a new tab. Paste the copied prompt there for a full LLM answer."
 };
 
 function value(id) {
@@ -1069,6 +1074,180 @@ function applyScenario(name) {
   setStatus(`${name[0].toUpperCase()}${name.slice(1)} scenario loaded.`);
 }
 
+function currentGuideContext() {
+  const cfg = readBaseConfig();
+  const lines = [
+    "Current app context:",
+    `- Mooring system: ${cfg.mooringSystem}`,
+    `- Load: ${formatNumber(cfg.designLoad_kN, 0)} kN`,
+    `- Angle: ${formatNumber(cfg.mooringAngle_deg, 1)} deg`,
+    `- Depth: ${formatNumber(cfg.waterDepth_m, 1)} m`,
+    `- Soil: ${cfg.soilType}`,
+    `- Rated power: ${formatNumber(cfg.ratedPowerPerDevice_kW, 0)} kW`
+  ];
+  if (lastSiteResult) {
+    const res = lastSiteResult.result;
+    lines.push(
+      `- Latest best anchor: ${res.best.Type} (${res.best.Variant})`,
+      `- Total system cost: ${formatMoney(res.perDevice.totalSystemCost_USD)}`,
+      `- Cost intensity: ${formatMoney(res.perDevice.totalCost_USD_per_kW, 2)}/kW`,
+      `- Feasible candidates: ${res.candidates.length}`,
+      `- Rejected checks: ${res.rejected.length}`
+    );
+  } else {
+    lines.push("- Latest best anchor: not run yet");
+  }
+  if (lastCsvSummary) lines.push(`- CSV scan: ${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible rows`);
+  if (lastArrayResult) lines.push(`- Array: ${lastArrayResult.result.Ndev.toLocaleString()} devices`);
+  if (lastParamSummary) lines.push(`- Study: ${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points`);
+  return lines.join("\n");
+}
+
+function guidePrompt(question) {
+  return [
+    "You are helping a user understand Anchor Selection Studio, a browser-based screening tool for mooring and anchor selection.",
+    "Use the current app context and explain step-by-step. Be clear that this is screening-level and needs engineering validation for final design.",
+    "",
+    currentGuideContext(),
+    "",
+    `User question: ${question || "How do I use this app and interpret the results?"}`
+  ].join("\n");
+}
+
+function answerGuideQuestion(rawQuestion) {
+  const q = String(rawQuestion || "").trim();
+  const text = q.toLowerCase();
+  const context = currentGuideContext();
+  if (!q) {
+    return "Ask a question first, or click one of the example question buttons.";
+  }
+  if (/(run|start|analysis|analyze|analyse|site)/.test(text)) {
+    return [
+      "To run a single-site analysis:",
+      "1. Set the Load Case inputs on the left: mooring system, angle, load, depth, power, soil, latitude, and longitude.",
+      "2. Adjust Mooring, Economics, Advanced Selector, and LCOE options if needed.",
+      "3. Click the red Run Site button.",
+      "4. The Site panel updates the recommended anchor, decision-readiness checks, metrics, candidate ranking, rejected checks, and cost breakdown.",
+      "5. If the app says the analysis is already up to date, the current results already match the current inputs.",
+      "",
+      context
+    ].join("\n");
+  }
+  if (/(work|worked|valid|correct|know|success|happened|nothing)/.test(text)) {
+    return [
+      "How to know it worked:",
+      "- The status line should say Results updated, Results ready, or Analysis is already up to date.",
+      "- The Recommended Anchor card should show a best anchor type and variant.",
+      "- Decision Readiness should list feasibility and review notes.",
+      "- Candidate Cost Ranking should show feasible candidates and costs.",
+      "- Rejected Checks explains why some anchor types were not allowed.",
+      "",
+      "If you changed inputs, click Run Site again. If nothing changed, the previous result is already the current result."
+    ].join("\n");
+  }
+  if (/(pdf|report|download|export)/.test(text)) {
+    return [
+      "To create a report:",
+      "1. Run Site first so the latest inputs have results.",
+      "2. Open the Report tab.",
+      "3. Click Build.",
+      "4. Click Download PDF for a PDF summary, or Download HTML for a browser-readable report.",
+      "",
+      "The PDF includes recommendation, design case, top candidates, workflow status, validation notes, and responsible-use language."
+    ].join("\n");
+  }
+  if (/(dea|dpa|sa|vla|ga|anchor|recommended|best)/.test(text)) {
+    return [
+      "The Recommended Anchor is the lowest-cost feasible candidate under the current ranking settings.",
+      "- GA: gravity anchor",
+      "- DPA: driven pile anchor",
+      "- SA: suction anchor",
+      "- DEA: drag embedment anchor",
+      "- VLA: vertical load anchor",
+      "",
+      "The app checks soil compatibility, load angle, holding capacity, geometry, vessel crane limits, fabrication/install cost, and optional mooring cost.",
+      "",
+      context
+    ].join("\n");
+  }
+  if (/(csv|map|upload|sample|regional|site scan)/.test(text)) {
+    return [
+      "For CSV scans:",
+      "1. Open the CSV tab.",
+      "2. Upload a CSV or click Sample.",
+      "3. Use the bounding box and depth filters.",
+      "4. Click Run.",
+      "5. Review map, anchor distribution, and result table.",
+      "",
+      "Expected columns: Latitude, Longitude, WaterDepth, Gravel, Sand, Mud, Clay, FolkCde."
+    ].join("\n");
+  }
+  if (/(array|shared|farm|spacing)/.test(text)) {
+    return [
+      "For array analysis:",
+      "1. Open the Array tab.",
+      "2. Set site length, width, spacing, count model, and lines per device.",
+      "3. Choose whether shared anchoring is enabled.",
+      "4. Click Run.",
+      "5. Compare non-shared and shared anchoring cost intensity and spacing feasibility."
+    ].join("\n");
+  }
+  if (/(study|parametric|sweep|sensitivity)/.test(text)) {
+    return [
+      "For a parametric study:",
+      "1. Open the Study tab.",
+      "2. Choose Design load, Load angle, Water depth, or Load + angle.",
+      "3. Set start, step, end, and max points.",
+      "4. Click Run.",
+      "5. Review cost intensity lines and the study results table."
+    ].join("\n");
+  }
+  if (/(gpt|chatgpt|llm|ai|openai|api|key|assistant)/.test(text)) {
+    return [
+      "About connecting to GPT:",
+      "This GitHub Pages app is static, so it should not contain an OpenAI API key. A key in browser JavaScript would be visible to the public.",
+      "",
+      "Safe options:",
+      "1. Use Copy GPT Prompt, then paste it into ChatGPT.",
+      "2. Use Open ChatGPT to open ChatGPT in a new tab.",
+      "3. For a true in-app GPT assistant, add a small secure backend endpoint that stores the API key server-side and returns answers to this page.",
+      "",
+      "I added the static Ask Guide now so users can get immediate help without accounts or API keys."
+    ].join("\n");
+  }
+  return [
+    "I can help with running Site analysis, CSV scans, Array analysis, Study sweeps, interpreting anchors, reports/PDFs, and GPT connection options.",
+    "",
+    "Try asking one of these:",
+    "- How do I run a single-site analysis?",
+    "- How do I know the result worked?",
+    "- How do I download a PDF report?",
+    "- What does the recommended anchor mean?",
+    "- Can this app use ChatGPT directly?",
+    "",
+    context
+  ].join("\n");
+}
+
+async function copyGuidePrompt() {
+  const question = value("ask-guide-input") || "How do I use this app and interpret the result?";
+  const prompt = guidePrompt(question);
+  try {
+    await navigator.clipboard.writeText(prompt);
+    setStatus("GPT prompt copied.");
+    $("#ask-guide-answer").textContent = "Copied a detailed GPT prompt with the current app context. Open ChatGPT and paste it there.";
+  } catch {
+    $("#ask-guide-answer").textContent = prompt;
+    setStatus("Clipboard blocked. Prompt shown in Ask Guide.", "bad");
+  }
+}
+
+function runAskGuide() {
+  const question = value("ask-guide-input");
+  $("#ask-guide-answer").textContent = answerGuideQuestion(question);
+  setStatus("Help answer generated.");
+}
+
 function reportFragment() {
   if (!lastSiteResult) {
     return `
@@ -1320,6 +1499,10 @@ function setup() {
     activateWorkspace("report-workspace");
     renderReportPreview();
   });
+  $("#open-help-top").addEventListener("click", () => {
+    activateWorkspace("guide-workspace");
+    setStatus("Help opened.");
+  });
   $("#run-csv").addEventListener("click", runCsvScan);
   $("#run-array").addEventListener("click", runArray);
   $("#run-parametric").addEventListener("click", runParametric);
@@ -1341,6 +1524,18 @@ function setup() {
     const pdf = makePdf(reportPdfLines());
     downloadText(`${outPrefix()}_executive_report.pdf`, pdf, "application/pdf");
     setStatus("PDF report downloaded.");
+  });
+  $("#ask-guide-run").addEventListener("click", runAskGuide);
+  $("#copy-gpt-prompt").addEventListener("click", copyGuidePrompt);
+  $("#open-chatgpt").addEventListener("click", () => {
+    window.open("https://chatgpt.com/", "_blank", "noopener");
+    setStatus("ChatGPT opened in a new tab.");
+  });
+  $$(".question-chip").forEach(button => {
+    button.addEventListener("click", () => {
+      setInputValue("ask-guide-input", button.dataset.question);
+      runAskGuide();
+    });
   });
   $("#download-csv").addEventListener("click", () => {
     if (!scanRows.length) return setStatus("No CSV scan results to download.", "bad");

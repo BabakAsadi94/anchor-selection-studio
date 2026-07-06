@@ -263,7 +263,7 @@ h3 {
 
 .quick-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
   gap: 8px;
   padding: 8px;
   background: #ffffff;
@@ -839,6 +839,88 @@ svg {
   color: var(--muted);
 }
 
+.tutorial-panel,
+.ask-panel {
+  background: #ffffff;
+}
+
+.tutorial-intro {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.tutorial-intro strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.tutorial-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tutorial-step {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  min-height: 150px;
+  padding: 14px;
+  background: #f8fbfc;
+  border: 1px solid #dce6eb;
+  border-radius: 8px;
+}
+
+.tutorial-step span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--ocean);
+  color: #fff;
+  font-weight: 800;
+}
+
+.tutorial-step p {
+  color: var(--muted);
+}
+
+.help-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#ask-guide-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.question-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.question-chip {
+  min-height: 32px;
+  background: #f8fbfc;
+  color: #2d3a43;
+}
+
+.guide-answer {
+  min-height: 120px;
+  padding: 14px;
+  white-space: pre-wrap;
+  color: #24313a;
+  background: #f4fbfc;
+  border: 1px solid #c6dce2;
+  border-left: 4px solid var(--ocean);
+  border-radius: 8px;
+}
+
 .method-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -996,7 +1078,8 @@ svg {
 
   .decision-panel,
   .guide-grid,
-  .method-grid {
+  .method-grid,
+  .tutorial-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1043,10 +1126,12 @@ svg {
   .two-col,
   .toggle-grid,
   .grid-six,
+  .quick-actions,
   .command-strip,
   .decision-panel,
   .decision-facts,
   .method-grid,
+  .tutorial-steps,
   .file-row {
     grid-template-columns: 1fr;
   }
