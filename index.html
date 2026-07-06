@@ -323,16 +323,42 @@
       <div id="csv-metrics" class="metric-grid"></div>
       <section class="map-layout">
         <div class="panel map-panel">
-          <div class="panel-head">
-            <h3>Map</h3>
-            <div id="map-legend" class="legend"></div>
+          <div class="panel-head map-head">
+            <h3>Map Studio</h3>
+            <div class="map-actions">
+              <button id="download-map-png" type="button">PNG</button>
+              <button id="download-map-svg" type="button">SVG</button>
+            </div>
+          </div>
+          <div class="map-toolbar" aria-label="Map controls">
+            <div class="segmented map-mode-tabs" role="group" aria-label="Map layer">
+              <button id="map-mode-anchor" class="map-mode active" type="button" data-map-mode="anchor">Anchor</button>
+              <button id="map-mode-cost" class="map-mode" type="button" data-map-mode="cost">Cost</button>
+              <button id="map-mode-soil" class="map-mode" type="button" data-map-mode="soil">Soil</button>
+              <button id="map-mode-depth" class="map-mode" type="button" data-map-mode="depth">Depth</button>
+              <button id="map-mode-feasible" class="map-mode" type="button" data-map-mode="feasible">Feasibility</button>
+            </div>
+            <div class="map-switches">
+              <label class="check compact-map"><input id="show-site-marker" type="checkbox" checked> Site marker</label>
+              <label class="check compact-map"><input id="show-coastline" type="checkbox" checked> Coastline</label>
+            </div>
           </div>
           <svg id="map-svg" role="img" aria-label="Anchor result map"></svg>
+          <div id="map-legend" class="legend"></div>
           <div id="map-note" class="chart-note"></div>
         </div>
-        <div class="panel">
-          <h3>Distribution</h3>
-          <div id="distribution-chart" class="bar-chart"></div>
+        <div class="map-side">
+          <div class="panel map-detail-panel">
+            <div class="panel-head">
+              <h3>Selected Site</h3>
+              <span id="map-selection-pill" class="status-pill review">None</span>
+            </div>
+            <div id="map-site-detail" class="map-site-detail">Run a CSV scan, then click a map point to inspect site-level inputs, recommendation, and cost.</div>
+          </div>
+          <div class="panel">
+            <h3>Distribution</h3>
+            <div id="distribution-chart" class="bar-chart"></div>
+          </div>
         </div>
       </section>
       <section class="panel">

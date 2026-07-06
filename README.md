@@ -20,7 +20,7 @@ http://127.0.0.1:8765/
 
 - Single-site anchor selection
 - Mooring cost calculation
-- US9-style CSV upload and map scan
+- US9-style CSV upload and Map Studio for multi-site scans
 - Soil classification from Gravel/Sand/Mud/Clay/FolkCde
 - Per-device USD and USD/kW reporting
 - Mooring + anchoring LCOE contribution
@@ -29,6 +29,8 @@ http://127.0.0.1:8765/
 - Combined design-load/load-angle parametric sweep
 - Advanced selector overrides: phi, water density, soil quotient, VLA coefficients, chain diameter, install-time mode, angle tolerance
 - MATLAB-style plot/display toggles and output prefix
+- Map layers for anchor recommendation, cost intensity, soil class, water depth, and feasibility
+- Click-to-inspect site details plus PNG/SVG map export
 - CSV result downloads
 - NC State-branded header and in-app hover/focus guidance
 - Help tab with tutorial steps, example questions, and built-in Ask Guide answers

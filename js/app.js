@@ -29,6 +29,27 @@ const colors = {
   Rock: "#6c6f73"
 };
 
+const MAP_MODES = {
+  anchor: { label: "Best anchor", note: "Point color = recommended anchor type; point size = USD/kW." },
+  cost: { label: "Cost intensity", note: "Point color and size increase with USD/kW." },
+  soil: { label: "Soil class", note: "Point color = inferred seabed class from the CSV sediment columns." },
+  depth: { label: "Water depth", note: "Point color darkens with water depth; point size still follows USD/kW." },
+  feasible: { label: "Feasibility", note: "Green points passed screening; red points need review or were rejected." }
+};
+
+const EAST_COASTLINE = [
+  [45.1, -66.9], [44.2, -68.3], [43.3, -69.5], [42.4, -70.5], [41.5, -71.2],
+  [40.7, -72.8], [40.2, -73.8], [39.4, -74.5], [38.7, -74.9], [37.8, -75.4],
+  [36.8, -75.8], [35.8, -75.6], [34.9, -76.4], [34.0, -77.7], [33.1, -79.0],
+  [32.3, -80.2], [31.3, -81.1], [30.3, -81.5], [29.2, -81.0], [28.3, -80.6],
+  [27.2, -80.2], [26.2, -80.1], [25.3, -80.3]
+];
+
+const GULF_COASTLINE = [
+  [30.4, -88.5], [30.2, -87.2], [29.8, -85.8], [29.7, -84.7], [29.4, -83.6],
+  [28.9, -82.9], [28.1, -82.7], [27.3, -82.7], [26.4, -82.1], [25.5, -81.2]
+];
+
 let csvRows = [];
 let scanRows = [];
 let paramRows = [];
@@ -40,6 +61,8 @@ let lastReportHtml = "";
 let siteRunButtonTimer = 0;
 let lastSiteSignature = "";
 let siteInputsDirty = false;
+let mapMode = "anchor";
+let selectedMapRowIndex = -1;
 
 const DEFAULT_HELP = "Hover or focus an option to see guidance.";
 
@@ -104,6 +127,15 @@ const HELP_TEXT = {
   "min-depth": "Minimum water depth retained during CSV filtering.",
   "max-depth": "Maximum water depth retained during CSV filtering.",
   "max-rows": "Maximum number of CSV rows to retain after filtering. Use smaller values for faster public demos.",
+  "map-mode-anchor": "Color map points by recommended anchor type.",
+  "map-mode-cost": "Color map points by cost intensity in USD/kW.",
+  "map-mode-soil": "Color map points by inferred seabed soil class.",
+  "map-mode-depth": "Color map points by water depth.",
+  "map-mode-feasible": "Color map points by feasibility status.",
+  "show-site-marker": "Show the current single-site latitude and longitude on the CSV map.",
+  "show-coastline": "Show a lightweight coastline reference for US East and Gulf Coast scans.",
+  "download-map-png": "Download the current map view as a PNG image.",
+  "download-map-svg": "Download the current map view as an SVG file.",
   "run-array": "Run the farm-level array comparison for non-shared and shared anchoring.",
   "site-length": "Usable project length in kilometers for estimating array device count.",
   "site-width": "Usable project width in kilometers for estimating array device count.",
@@ -172,6 +204,48 @@ function setInputValue(id, nextValue) {
 function setInputChecked(id, nextValue) {
   const el = document.getElementById(id);
   if (el) el.checked = Boolean(nextValue);
+}
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function hexToRgb(hex) {
+  const raw = String(hex).replace("#", "");
+  const normalized = raw.length === 3 ? raw.split("").map(ch => ch + ch).join("") : raw;
+  const n = Number.parseInt(normalized, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function mixColor(a, b, t) {
+  const start = hexToRgb(a);
+  const end = hexToRgb(b);
+  const u = clamp01(t);
+  return rgbToHex({
+    r: start.r + (end.r - start.r) * u,
+    g: start.g + (end.g - start.g) * u,
+    b: start.b + (end.b - start.b) * u
+  });
+}
+
+function rampColor(t, stops) {
+  const u = clamp01(t);
+  if (u <= 0.5) return mixColor(stops[0], stops[1], u * 2);
+  return mixColor(stops[1], stops[2], (u - 0.5) * 2);
+}
+
+function valueRange(rows, key) {
+  const values = rows.map(row => Number(row[key])).filter(Number.isFinite);
+  return values.length ? { min: Math.min(...values), max: Math.max(...values) } : { min: NaN, max: NaN };
+}
+
+function normalizeValue(value, range) {
+  return Number.isFinite(value) && Number.isFinite(range.min) && range.max > range.min ? (value - range.min) / (range.max - range.min) : 0.35;
 }
 
 function setStatus(message, tone = "ok") {
@@ -452,6 +526,33 @@ function applyPlotToggles() {
   if (distribution) distribution.style.display = checked("plot-box") || checked("plot-share") ? "" : "none";
 }
 
+function updateMapModeButtons() {
+  $$(".map-mode").forEach(button => {
+    const active = button.dataset.mapMode === mapMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function bestMapRowIndex(rows) {
+  const feasible = rows
+    .map((row, index) => ({ row, index }))
+    .filter(item => item.row.Status === "OK" && Number.isFinite(item.row.TotalCost_USD_per_kW))
+    .sort((a, b) => a.row.TotalCost_USD_per_kW - b.row.TotalCost_USD_per_kW);
+  return feasible.length ? feasible[0].index : (rows.length ? 0 : -1);
+}
+
+function renderCsvMapViews() {
+  const distribution = anchorDistribution(scanRows);
+  renderDistribution($("#distribution-chart"), distribution);
+  renderMapLegend(scanRows);
+  renderMap($("#map-svg"), scanRows);
+  renderMapNote(scanRows);
+  renderMapSiteDetail(scanRows[selectedMapRowIndex]);
+  updateMapModeButtons();
+  applyPlotToggles();
+}
+
 function renderMetrics(container, metrics) {
   container.innerHTML = metrics.map(item => `
     <div class="metric">
@@ -590,7 +691,6 @@ function runCsvScan() {
     }
     const ok = scanRows.filter(r => r.Status === "OK");
     const averageCost = ok.reduce((s, r) => s + r.TotalSystemCost_USD, 0) / Math.max(ok.length, 1);
-    const distribution = anchorDistribution(scanRows);
     lastCsvSummary = {
       retained: scanRows.length,
       feasible: ok.length,
@@ -598,6 +698,7 @@ function runCsvScan() {
       mode: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan",
       removed: scan.removed
     };
+    selectedMapRowIndex = bestMapRowIndex(scanRows);
     setStatus(`CSV scan complete: ${scanRows.length} retained rows.`);
     renderMetrics($("#csv-metrics"), [
       { label: "Used sites", value: scanRows.length.toLocaleString() },
@@ -608,11 +709,7 @@ function runCsvScan() {
       { label: "Unknown soil", value: scan.removed.unknownSoil.toLocaleString() },
       { label: "Source mode", value: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan" }
     ]);
-    renderDistribution($("#distribution-chart"), distribution);
-    renderLegend($("#map-legend"), ANCHOR_ORDER.filter(type => distribution.some(item => item.type === type && item.count > 0)));
-    renderMap($("#map-svg"), scanRows);
-    renderMapNote(scanRows);
-    applyPlotToggles();
+    renderCsvMapViews();
     renderTable($("#csv-table"), scanRows, [
       { key: "Lat", label: "Lat", format: v => formatNumber(v, 4) },
       { key: "Lon", label: "Lon", format: v => formatNumber(v, 4) },
@@ -642,6 +739,111 @@ function renderDistribution(container, distribution) {
   `).join("");
 }
 
+function renderMapLegend(rows) {
+  const legend = $("#map-legend");
+  if (!legend) return;
+  if (!rows.length) {
+    legend.innerHTML = "";
+    return;
+  }
+  const costRange = valueRange(rows, "TotalCost_USD_per_kW");
+  const depthRange = valueRange(rows, "WaterDepth_m");
+  const items = {
+    anchor: ANCHOR_ORDER.filter(type => rows.some(row => (row.BestAnchorType || "No feasible") === type)).map(type => ({ label: type, color: colors[type] || "#555" })),
+    soil: SOIL_ORDER.filter(type => rows.some(row => row.SoilType === type)).map(type => ({ label: type, color: colors[type] || "#555" })),
+    feasible: [
+      { label: "Feasible", color: "#2e9f6e" },
+      { label: "Review / rejected", color: "#bd3f32" }
+    ],
+    cost: [
+      { label: `${formatMoney(costRange.min, 2)}/kW low`, color: "#2e9f6e" },
+      { label: "mid", color: "#caa52d" },
+      { label: `${formatMoney(costRange.max, 2)}/kW high`, color: "#bd3f32" }
+    ],
+    depth: [
+      { label: `${formatNumber(depthRange.min, 1)} m shallow`, color: "#b7e1ef" },
+      { label: "mid", color: "#2978a0" },
+      { label: `${formatNumber(depthRange.max, 1)} m deep`, color: "#172026" }
+    ]
+  }[mapMode] || [];
+  legend.innerHTML = items.map(item => `
+    <span class="legend-item"><span class="legend-swatch" style="background:${escapeHtml(item.color)}"></span>${escapeHtml(item.label)}</span>
+  `).join("");
+}
+
+function mapPointColor(row, ranges) {
+  if (mapMode === "cost") {
+    const norm = normalizeValue(row.TotalCost_USD_per_kW, ranges.cost);
+    return Number.isFinite(row.TotalCost_USD_per_kW) ? rampColor(norm, ["#2e9f6e", "#caa52d", "#bd3f32"]) : "#6f747b";
+  }
+  if (mapMode === "soil") return colors[row.SoilType] || "#6f747b";
+  if (mapMode === "depth") {
+    const norm = normalizeValue(row.WaterDepth_m, ranges.depth);
+    return Number.isFinite(row.WaterDepth_m) ? rampColor(norm, ["#b7e1ef", "#2978a0", "#172026"]) : "#6f747b";
+  }
+  if (mapMode === "feasible") return row.Status === "OK" ? "#2e9f6e" : "#bd3f32";
+  return colors[row.BestAnchorType || "No feasible"] || "#333";
+}
+
+function mapPointLabel(row) {
+  return [
+    `${formatNumber(row.Lat, 4)}, ${formatNumber(row.Lon, 4)}`,
+    `${row.SoilType || "Unknown soil"}`,
+    `${row.BestAnchorType || "No feasible"}`,
+    `${formatMoney(row.TotalCost_USD_per_kW, 2)}/kW`,
+    `${formatNumber(row.WaterDepth_m, 1)} m`
+  ].join(" | ");
+}
+
+function appendSvgText(svg, text, x, y, cls, anchor = "middle") {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  el.textContent = text;
+  el.setAttribute("x", x);
+  el.setAttribute("y", y);
+  el.setAttribute("class", cls);
+  el.setAttribute("text-anchor", anchor);
+  svg.appendChild(el);
+  return el;
+}
+
+function appendCoastline(svg, sx, sy, minLon, maxLon, minLat, maxLat) {
+  if (!checked("show-coastline")) return;
+  [EAST_COASTLINE, GULF_COASTLINE].forEach(line => {
+    const visible = line.some(([lat, lon]) => lat >= minLat - 2 && lat <= maxLat + 2 && lon >= minLon - 2 && lon <= maxLon + 2);
+    if (!visible) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", line.map(([lat, lon], index) => `${index ? "L" : "M"} ${sx(lon)} ${sy(lat)}`).join(" "));
+    path.setAttribute("class", "coastline");
+    svg.appendChild(path);
+  });
+}
+
+function appendSiteMarker(svg, sx, sy, minLon, maxLon, minLat, maxLat) {
+  if (!checked("show-site-marker")) return;
+  const lat = numberValue("site-lat", NaN);
+  const lon = numberValue("site-lon", NaN);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) return;
+  const x = sx(lon);
+  const y = sy(lat);
+  const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  ring.setAttribute("cx", x);
+  ring.setAttribute("cy", y);
+  ring.setAttribute("r", 14);
+  ring.setAttribute("class", "site-marker-ring");
+  svg.appendChild(ring);
+  const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  point.setAttribute("cx", x);
+  point.setAttribute("cy", y);
+  point.setAttribute("r", 5);
+  point.setAttribute("class", "site-marker");
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = `Single-site input: ${formatNumber(lat, 4)}, ${formatNumber(lon, 4)}`;
+  point.appendChild(title);
+  svg.appendChild(point);
+  appendSvgText(svg, "Site", x + 10, y - 10, "axis-text", "start");
+}
+
 function renderMap(svg, rows) {
   const width = 820;
   const height = 470;
@@ -658,17 +860,12 @@ function renderMap(svg, rows) {
   const costs = rows.map(r => r.TotalCost_USD_per_kW).filter(Number.isFinite);
   const minCost = costs.length ? Math.min(...costs) : NaN;
   const maxCost = costs.length ? Math.max(...costs) : NaN;
+  const ranges = {
+    cost: { min: minCost, max: maxCost },
+    depth: valueRange(rows, "WaterDepth_m")
+  };
   const sx = lon => pad + (lon - minLon) / Math.max(maxLon - minLon, 1e-9) * (width - 2 * pad);
   const sy = lat => height - pad - (lat - minLat) / Math.max(maxLat - minLat, 1e-9) * (height - 2 * pad);
-  const addText = (text, x, y, cls, anchor = "middle") => {
-    const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    el.textContent = text;
-    el.setAttribute("x", x);
-    el.setAttribute("y", y);
-    el.setAttribute("class", cls);
-    el.setAttribute("text-anchor", anchor);
-    svg.appendChild(el);
-  };
 
   const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   bg.setAttribute("x", "0");
@@ -677,6 +874,8 @@ function renderMap(svg, rows) {
   bg.setAttribute("height", height);
   bg.setAttribute("class", "map-bg");
   svg.appendChild(bg);
+
+  appendCoastline(svg, sx, sy, minLon, maxLon, minLat, maxLat);
 
   for (let i = 0; i < 6; i += 1) {
     const x = pad + i * (width - 2 * pad) / 5;
@@ -697,13 +896,29 @@ function renderMap(svg, rows) {
     svg.appendChild(hLine);
   }
 
-  addText(`${formatNumber(minLon, 2)} lon`, pad, height - 10, "axis-text", "start");
-  addText(`${formatNumber(maxLon, 2)} lon`, width - pad, height - 10, "axis-text", "end");
-  addText(`${formatNumber(minLat, 2)} lat`, 8, height - pad, "axis-text", "start");
-  addText(`${formatNumber(maxLat, 2)} lat`, 8, pad + 4, "axis-text", "start");
-  addText("Point color = best anchor; point size = USD/kW", width / 2, 20, "axis-title");
+  appendSvgText(svg, `${formatNumber(minLon, 2)} lon`, pad, height - 10, "axis-text", "start");
+  appendSvgText(svg, `${formatNumber(maxLon, 2)} lon`, width - pad, height - 10, "axis-text", "end");
+  appendSvgText(svg, `${formatNumber(minLat, 2)} lat`, 8, height - pad, "axis-text", "start");
+  appendSvgText(svg, `${formatNumber(maxLat, 2)} lat`, 8, pad + 4, "axis-text", "start");
+  appendSvgText(svg, MAP_MODES[mapMode]?.note || MAP_MODES.anchor.note, width / 2, 20, "axis-title");
 
-  rows.forEach(row => {
+  if (mapMode === "cost") {
+    rows.forEach(row => {
+      const cost = row.TotalCost_USD_per_kW;
+      if (!Number.isFinite(cost)) return;
+      const norm = normalizeValue(cost, ranges.cost);
+      const halo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      halo.setAttribute("cx", sx(row.Lon));
+      halo.setAttribute("cy", sy(row.Lat));
+      halo.setAttribute("r", rows.length > 2500 ? 5 : 8 + 8 * norm);
+      halo.setAttribute("fill", rampColor(norm, ["#2e9f6e", "#caa52d", "#bd3f32"]));
+      halo.setAttribute("opacity", "0.16");
+      halo.setAttribute("class", "map-point-halo");
+      svg.appendChild(halo);
+    });
+  }
+
+  rows.forEach((row, index) => {
     const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     const cost = row.TotalCost_USD_per_kW;
     const norm = Number.isFinite(cost) && Number.isFinite(minCost) && maxCost > minCost ? (cost - minCost) / (maxCost - minCost) : 0.35;
@@ -711,13 +926,32 @@ function renderMap(svg, rows) {
     point.setAttribute("cx", sx(row.Lon));
     point.setAttribute("cy", sy(row.Lat));
     point.setAttribute("r", radius);
-    point.setAttribute("fill", colors[row.BestAnchorType] || "#333");
+    point.setAttribute("fill", mapPointColor(row, ranges));
     point.setAttribute("opacity", row.Status === "OK" ? "0.82" : "0.45");
+    point.setAttribute("class", `map-point${index === selectedMapRowIndex ? " selected" : ""}`);
+    point.setAttribute("tabindex", "0");
+    point.setAttribute("role", "button");
+    point.setAttribute("aria-label", mapPointLabel(row));
     const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `${row.Lat.toFixed(4)}, ${row.Lon.toFixed(4)} | ${row.SoilType} | ${row.BestAnchorType} | ${formatMoney(row.TotalSystemCost_USD)}`;
+    title.textContent = mapPointLabel(row);
     point.appendChild(title);
+    point.addEventListener("click", () => {
+      selectedMapRowIndex = index;
+      renderCsvMapViews();
+      setStatus("Map site selected.");
+    });
+    point.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectedMapRowIndex = index;
+        renderCsvMapViews();
+        setStatus("Map site selected.");
+      }
+    });
     svg.appendChild(point);
   });
+
+  appendSiteMarker(svg, sx, sy, minLon, maxLon, minLat, maxLat);
 }
 
 function renderMapNote(rows) {
@@ -725,11 +959,110 @@ function renderMapNote(rows) {
   if (!note) return;
   const ok = rows.filter(row => row.Status === "OK" && Number.isFinite(row.TotalCost_USD_per_kW));
   if (!ok.length) {
-    note.textContent = "No feasible cost-intensity points available for the current scan.";
+    note.textContent = `${MAP_MODES[mapMode]?.label || "Map"} view. No feasible cost-intensity points available for the current scan.`;
     return;
   }
   const costs = ok.map(row => row.TotalCost_USD_per_kW);
-  note.textContent = `Cost intensity range: ${formatMoney(Math.min(...costs), 2)}/kW to ${formatMoney(Math.max(...costs), 2)}/kW across ${ok.length.toLocaleString()} feasible site${ok.length === 1 ? "" : "s"}.`;
+  const depths = ok.map(row => row.WaterDepth_m).filter(Number.isFinite);
+  const mode = MAP_MODES[mapMode]?.label || "Map";
+  const depthText = depths.length ? ` Depth range: ${formatNumber(Math.min(...depths), 1)}-${formatNumber(Math.max(...depths), 1)} m.` : "";
+  note.textContent = `${mode} view. Cost intensity range: ${formatMoney(Math.min(...costs), 2)}/kW to ${formatMoney(Math.max(...costs), 2)}/kW across ${ok.length.toLocaleString()} feasible site${ok.length === 1 ? "" : "s"}.${depthText} Click a point for site details.`;
+}
+
+function renderMapSiteDetail(row) {
+  const detail = $("#map-site-detail");
+  const pill = $("#map-selection-pill");
+  if (!detail) return;
+  if (!row) {
+    detail.textContent = "Run a CSV scan, then click a map point to inspect site-level inputs, recommendation, and cost.";
+    if (pill) {
+      pill.textContent = "None";
+      pill.className = "status-pill review";
+    }
+    return;
+  }
+  if (pill) {
+    pill.textContent = row.Status === "OK" ? "Feasible" : "Review";
+    pill.className = `status-pill ${row.Status === "OK" ? "" : "bad"}`;
+  }
+  const lcoeText = Number.isFinite(row.MooringAnchorLCOE_USD_per_MWh) ? `${formatMoney(row.MooringAnchorLCOE_USD_per_MWh, 2)}/MWh` : "Disabled";
+  detail.innerHTML = `
+    <dl>
+      <dt>Latitude</dt><dd>${escapeHtml(formatNumber(row.Lat, 5))}</dd>
+      <dt>Longitude</dt><dd>${escapeHtml(formatNumber(row.Lon, 5))}</dd>
+      <dt>Depth</dt><dd>${escapeHtml(formatNumber(row.WaterDepth_m, 1))} m</dd>
+      <dt>Soil</dt><dd>${escapeHtml(row.SoilType || "Unknown")}</dd>
+      <dt>Best anchor</dt><dd>${escapeHtml(row.BestAnchorType || "No feasible")}</dd>
+      <dt>Total system</dt><dd>${escapeHtml(formatMoney(row.TotalSystemCost_USD))}</dd>
+      <dt>Cost intensity</dt><dd>${escapeHtml(formatMoney(row.TotalCost_USD_per_kW, 2))}/kW</dd>
+      <dt>LCOE</dt><dd>${escapeHtml(lcoeText)}</dd>
+      <dt>Status</dt><dd>${escapeHtml(row.Status || "Unknown")}</dd>
+      ${Number.isFinite(row.NearestDistance_km) ? `<dt>Nearest distance</dt><dd>${escapeHtml(formatNumber(row.NearestDistance_km, 2))} km</dd>` : ""}
+    </dl>
+  `;
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function exportableMapSvgString() {
+  const svg = $("#map-svg");
+  if (!svg || !scanRows.length) return "";
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.textContent = `
+    .map-bg{fill:#f8fbfc}.grid-line{stroke:#d9e1e8;stroke-width:1}.axis-text{fill:#4f5c66;font-size:12px;font-family:Arial,sans-serif}.axis-title{fill:#2f3c45;font-size:13px;font-weight:700;font-family:Arial,sans-serif}.coastline{fill:none;stroke:#8ca6b3;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}.site-marker{fill:#fff;stroke:#cc0000;stroke-width:3}.site-marker-ring{fill:none;stroke:#cc0000;stroke-width:2;opacity:.38}.map-point{stroke:#fff;stroke-width:.8}.map-point.selected{stroke:#172026;stroke-width:2.4}.map-point-halo{pointer-events:none}
+  `;
+  clone.insertBefore(style, clone.firstChild);
+  return new XMLSerializer().serializeToString(clone);
+}
+
+function downloadMapSvg() {
+  const svgText = exportableMapSvgString();
+  if (!svgText) return setStatus("Run a CSV scan before exporting the map.", "bad");
+  downloadText(`${outPrefix()}_${mapMode}_map.svg`, svgText, "image/svg+xml");
+  setStatus("Map SVG downloaded.");
+}
+
+function downloadMapPng() {
+  const svgText = exportableMapSvgString();
+  if (!svgText) return setStatus("Run a CSV scan before exporting the map.", "bad");
+  const svg = $("#map-svg");
+  const viewBox = String(svg.getAttribute("viewBox") || "0 0 820 470").split(/\s+/).map(Number);
+  const width = viewBox[2] || 820;
+  const height = viewBox[3] || 470;
+  const blob = new Blob([svgText], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(png => {
+      if (!png) return setStatus("PNG export failed.", "bad");
+      downloadBlob(`${outPrefix()}_${mapMode}_map.png`, png);
+      setStatus("Map PNG downloaded.");
+    }, "image/png");
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    setStatus("PNG export failed.", "bad");
+  };
+  image.src = url;
 }
 
 function runArray() {
@@ -1122,7 +1455,8 @@ function answerGuideQuestion(rawQuestion) {
       "3. Choose CSV source mode: Map scan evaluates all retained rows; Nearest site keeps the closest retained row to the current latitude and longitude.",
       "4. Set the bounding box, depth filters, and max rows.",
       "5. Click Run.",
-      "6. Review the map, anchor distribution, metrics, and results table. Use Download to export the scan table.",
+      "6. Use Map Studio to switch between Anchor, Cost, Soil, Depth, and Feasibility views.",
+      "7. Click any map point to inspect that site. Use PNG or SVG to export the current map, and Download to export the scan table.",
       "",
       "Expected columns: Latitude, Longitude, WaterDepth, Gravel, Sand, Mud, Clay, FolkCde.",
       "",
@@ -1478,6 +1812,17 @@ function setup() {
   $("#run-array").addEventListener("click", runArray);
   $("#run-parametric").addEventListener("click", runParametric);
   $("#load-sample").addEventListener("click", loadSampleCsv);
+  $$(".map-mode").forEach(button => {
+    button.addEventListener("click", () => {
+      mapMode = button.dataset.mapMode || "anchor";
+      renderCsvMapViews();
+      setStatus(`Map view changed to ${MAP_MODES[mapMode]?.label || "Map"}.`);
+    });
+  });
+  $("#show-site-marker").addEventListener("change", renderCsvMapViews);
+  $("#show-coastline").addEventListener("change", renderCsvMapViews);
+  $("#download-map-png").addEventListener("click", downloadMapPng);
+  $("#download-map-svg").addEventListener("click", downloadMapSvg);
   $$(".preset-button").forEach(button => {
     button.addEventListener("click", () => applyScenario(button.dataset.scenario));
   });
