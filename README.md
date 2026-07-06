@@ -36,7 +36,7 @@ http://127.0.0.1:8765/
 - Decision-readiness summary with validation notes and ranking gap
 - Per-device cost breakdown and richer chart legends
 - Methodology & QA workspace for model scope, cost logic, CSV soil mapping, and responsible-use notes
-- Executive report builder with downloadable HTML summary
+- Executive report builder with downloadable HTML and PDF summaries
 - Fully static frontend with no server-side data handling
 
 ## Expected CSV Columns

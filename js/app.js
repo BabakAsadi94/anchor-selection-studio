@@ -128,7 +128,8 @@ const HELP_TEXT = {
   "scenario-tlp": "Set a high-angle TLP case to exercise vertical-load anchor behavior.",
   "scenario-array": "Set a practical array demonstration with shared anchoring enabled.",
   "build-report": "Generate an executive summary from the latest site, CSV, array, and study results.",
-  "download-report": "Download the generated executive report as a self-contained HTML file."
+  "download-report": "Download the generated executive report as a self-contained HTML file.",
+  "download-report-pdf": "Download a PDF summary of the current executive report."
 };
 
 function value(id) {
@@ -207,14 +208,13 @@ function setSiteRunButtons(text, disabled = false) {
 function resetSiteRunButtons() {
   const main = $("#run-site");
   const top = $("#run-site-top");
-  const current = Boolean(lastSiteResult && !siteInputsDirty);
   if (main) {
-    main.textContent = current ? "Current" : "Run";
-    main.disabled = current;
+    main.textContent = "Run";
+    main.disabled = false;
   }
   if (top) {
-    top.textContent = current ? "Current" : "Run Site";
-    top.disabled = current;
+    top.textContent = "Run Site";
+    top.disabled = false;
   }
 }
 
@@ -240,10 +240,10 @@ function markSiteInputsDirty() {
 function requestSiteRun() {
   const signature = siteConfigSignature();
   if (lastSiteResult && signature === lastSiteSignature && !siteInputsDirty) {
-    const message = `Results already current as of ${runStamp()}. Change an input to create a new result.`;
+    const message = `Analysis is already up to date as of ${runStamp()}. Change an input, then click Run Site to update.`;
     setStatus(message);
     updateSiteRunFeedback(message);
-    markSiteButtonState("Already current", true);
+    markSiteButtonState("Up to date");
     return;
   }
   clearTimeout(siteRunButtonTimer);
@@ -516,7 +516,7 @@ function runSite(source = "auto") {
     const runMessage = source === "manual" ? `Results updated at ${stamp}.` : `Results ready at ${stamp}.`;
     setStatus(runMessage);
     updateSiteRunFeedback(`${runMessage} Best anchor: ${res.best.Type}; total system: ${formatMoney(res.perDevice.totalSystemCost_USD)}.`);
-    markSiteButtonState(source === "manual" ? "Updated" : "Current", source !== "manual");
+    markSiteButtonState(source === "manual" ? "Updated" : "Ready");
     renderDecisionSummary($("#decision-summary"), res, cfg, flags);
     renderValidation($("#validation-panel"), flags);
     const metrics = [
@@ -1155,6 +1155,145 @@ function reportDocument(fragment) {
 </html>`;
 }
 
+function pdfEscape(value) {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+}
+
+function wrapPdfText(text, maxChars = 92) {
+  const words = String(text ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let line = "";
+  words.forEach(word => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+function reportPdfLines() {
+  if (!lastSiteResult) runSite();
+  const { config: cfg, result: res } = lastSiteResult;
+  const flags = validationFlags(cfg, res);
+  const lines = [
+    { text: "Anchor Selection Studio Report", size: 18, bold: true, gap: 8 },
+    { text: `Generated ${new Date().toLocaleString()}`, size: 10 },
+    { text: "Screening-level anchor and mooring decision-support summary.", size: 10, gap: 12 },
+    { text: "Recommendation", size: 14, bold: true, gap: 6 },
+    { text: `Best anchor: ${res.best.Type} - ${res.best.Variant}`, bold: true },
+    { text: `Vessel: ${res.best.Vessel}` },
+    { text: `Total system cost: ${formatMoney(res.perDevice.totalSystemCost_USD)}` },
+    { text: `Cost intensity: ${formatMoney(res.perDevice.totalCost_USD_per_kW, 2)}/kW` },
+    { text: `Anchor mass: ${formatNumber(res.best.Mass_kg / 1000, 2)} t` },
+    { text: `MBL required: ${formatNumber(res.best.MBL_required_kN, 1)} kN` },
+    { text: `UHC: ${formatNumber(res.best.UHC_kN, 1)} kN`, gap: 12 },
+    { text: "Design Case", size: 14, bold: true, gap: 6 },
+    { text: `Mooring system: ${cfg.mooringSystem}` },
+    { text: `Load and angle: ${formatNumber(cfg.designLoad_kN, 0)} kN at ${formatNumber(cfg.mooringAngle_deg, 1)} deg` },
+    { text: `Water depth: ${formatNumber(cfg.waterDepth_m, 1)} m` },
+    { text: `Soil: ${cfg.soilType}` },
+    { text: `Rated power: ${formatNumber(cfg.ratedPowerPerDevice_kW, 0)} kW` },
+    { text: `Mooring: ${cfg.numMooringLines} lines, ${cfg.mooringMaterial}`, gap: 12 },
+    { text: "Top Candidates", size: 14, bold: true, gap: 6 }
+  ];
+  res.candidates.slice(0, 6).forEach((candidate, index) => {
+    lines.push({
+      text: `${index + 1}. ${candidate.Type} | ${candidate.Variant} | ${candidate.Vessel} | ${formatNumber(candidate.Mass_kg / 1000, 2)} t | ${formatMoney(candidate.AnchorCost_EUR * cfg.fxUsdPerEur * Math.max(1, Math.round(cfg.numMooringLines)))}`
+    });
+  });
+  lines.push(
+    { text: "Workflow Status", size: 14, bold: true, gap: 12 },
+    { text: `CSV scan: ${lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run"}` },
+    { text: `Array analysis: ${lastArrayResult ? `${lastArrayResult.result.Ndev.toLocaleString()} devices, shared ${lastArrayResult.result.shared.anchorType}` : "Not run"}` },
+    { text: `Parametric study: ${lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run"}`, gap: 12 },
+    { text: "Validation Notes", size: 14, bold: true, gap: 6 }
+  );
+  flags.forEach(flag => lines.push({ text: `- ${flag.text}` }));
+  lines.push(
+    { text: "Responsible Use", size: 14, bold: true, gap: 12 },
+    { text: "Use this report for screening, comparison, and research planning. Detailed design should include site investigation, geotechnical review, project-specific installation constraints, and independent engineering validation." }
+  );
+  return lines;
+}
+
+function makePdf(lines) {
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const margin = 54;
+  const bottom = 54;
+  const pages = [];
+  let current = [];
+  let y = pageHeight - margin;
+
+  const pushLine = item => {
+    const size = item.size || 10;
+    const lineHeight = size + 5;
+    if (y - lineHeight < bottom && current.length) {
+      pages.push(current);
+      current = [];
+      y = pageHeight - margin;
+    }
+    current.push({ ...item, y });
+    y -= lineHeight + (item.gap || 0);
+  };
+
+  lines.forEach(item => {
+    wrapPdfText(item.text, item.size && item.size > 12 ? 64 : 92).forEach((line, index) => {
+      pushLine({ ...item, text: line, gap: index === 0 ? item.gap : 0 });
+    });
+  });
+  if (current.length) pages.push(current);
+
+  const objects = [];
+  const addObject = content => {
+    objects.push(content);
+    return objects.length;
+  };
+
+  const catalogId = addObject("PLACEHOLDER_CATALOG");
+  const pagesId = addObject("PLACEHOLDER_PAGES");
+  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const boldFontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+  const pageIds = [];
+
+  pages.forEach((page, pageIndex) => {
+    const content = page.map(item => {
+      const font = item.bold ? "F2" : "F1";
+      const size = item.size || 10;
+      return `BT /${font} ${size} Tf ${margin} ${item.y.toFixed(1)} Td (${pdfEscape(item.text)}) Tj ET`;
+    }).join("\n") + `\nBT /F1 9 Tf ${pageWidth - margin - 70} 30 Td (Page ${pageIndex + 1} of ${pages.length}) Tj ET`;
+    const contentId = addObject(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldFontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  });
+
+  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(offset => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdf;
+}
+
 function renderReportPreview() {
   const preview = $("#report-preview");
   if (!preview) return;
@@ -1197,6 +1336,11 @@ function setup() {
     if (!lastReportHtml) renderReportPreview();
     downloadText(`${outPrefix()}_executive_report.html`, lastReportHtml, "text/html");
     setStatus("Executive report downloaded.");
+  });
+  $("#download-report-pdf").addEventListener("click", () => {
+    const pdf = makePdf(reportPdfLines());
+    downloadText(`${outPrefix()}_executive_report.pdf`, pdf, "application/pdf");
+    setStatus("PDF report downloaded.");
   });
   $("#download-csv").addEventListener("click", () => {
     if (!scanRows.length) return setStatus("No CSV scan results to download.", "bad");
