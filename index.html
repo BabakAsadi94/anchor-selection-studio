@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anchor Selection Studio</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Anchor Selection Studio</h1>
+      <p>Screening model for mooring, anchor type, site scans, arrays, and cost intensity.</p>
+    </div>
+    <div id="status-line" data-tone="ok">Ready.</div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="control-panel">
+      <nav class="tabs" aria-label="Analysis modes">
+        <button class="tab-button active" data-target="site-workspace">Site</button>
+        <button class="tab-button" data-target="csv-workspace">CSV</button>
+        <button class="tab-button" data-target="array-workspace">Array</button>
+        <button class="tab-button" data-target="param-workspace">Study</button>
+      </nav>
+
+      <section class="control-group">
+        <h2>Load Case</h2>
+        <label>Mooring system
+          <select id="mooring-system">
+            <option value="catenary">Catenary</option>
+            <option value="taut">Taut</option>
+            <option value="tlp">TLP</option>
+          </select>
+        </label>
+        <div class="two-col">
+          <label>Angle deg
+            <input id="mooring-angle" type="number" value="0" step="1" min="0" max="90">
+          </label>
+          <label>Load kN
+            <input id="design-load" type="number" value="1000" step="50" min="1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Depth m
+            <input id="water-depth" type="number" value="80" step="1" min="0">
+          </label>
+          <label>Power kW
+            <input id="rated-power" type="number" value="500" step="10" min="1">
+          </label>
+        </div>
+        <label>Soil type
+          <select id="soil-type">
+            <option>Very Soft Clay</option>
+            <option selected>Medium Clay</option>
+            <option>Hard Clay</option>
+            <option>Sand</option>
+            <option>Rock</option>
+          </select>
+        </label>
+        <div class="two-col">
+          <label>Lat
+            <input id="site-lat" type="number" value="35" step="0.001">
+          </label>
+          <label>Lon
+            <input id="site-lon" type="number" value="-75" step="0.001">
+          </label>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>Mooring</h2>
+        <label class="check"><input id="use-mooring" type="checkbox" checked> Include mooring</label>
+        <label class="check"><input id="include-mooring-ranking" type="checkbox" checked> Rank with mooring</label>
+        <div class="two-col">
+          <label>Material
+            <select id="mooring-material">
+              <option selected>chain</option>
+              <option>nylon</option>
+              <option>polyester</option>
+              <option>steel wire</option>
+            </select>
+          </label>
+          <label>Lines
+            <input id="num-lines" type="number" value="3" min="1" step="1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>MBL factor
+            <input id="mbl-factor" type="number" value="1.0" step="0.05" min="1">
+          </label>
+          <label>Anchor SF
+            <input id="safety-factor" type="number" value="1.1" step="0.05" min="0.1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Length model
+            <select id="length-model">
+              <option value="depth" selected>Depth</option>
+              <option value="fixed">Fixed</option>
+            </select>
+          </label>
+          <label>Fixed m
+            <input id="fixed-length" type="number" value="400" step="10" min="1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Cat factor
+            <input id="cat-factor" type="number" value="4" step="0.1" min="0.1">
+          </label>
+          <label>Chain grade
+            <input id="chain-grade" type="number" value="1" step="0.05" min="0.1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Taut slack
+            <input id="taut-slack" type="number" value="1.02" step="0.01" min="1">
+          </label>
+          <label>Taut min deg
+            <input id="taut-min-angle" type="number" value="5" step="1" min="0">
+          </label>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>Economics</h2>
+        <div class="two-col">
+          <label>FX USD/EUR
+            <input id="fx" type="number" value="1.10" step="0.01" min="0.01">
+          </label>
+          <label class="check compact"><input id="enforce-crane" type="checkbox" checked> Crane cap</label>
+        </div>
+        <div class="two-col">
+          <label>CSV cap t
+            <input id="csv-crane" type="number" value="1000" step="10" min="1">
+          </label>
+          <label>AHV cap t
+            <input id="ahv-crane" type="number" value="250" step="10" min="1">
+          </label>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace active" id="site-workspace">
+      <div class="workspace-head">
+        <h2>Single Site</h2>
+        <button id="run-site" class="primary">Run</button>
+      </div>
+      <div id="site-metrics" class="metric-grid"></div>
+      <section class="panel">
+        <h3>Candidate Cost Ranking</h3>
+        <div id="candidate-chart" class="bar-chart"></div>
+      </section>
+      <section class="panel">
+        <h3>Candidates</h3>
+        <div id="candidate-table" class="table-wrap"></div>
+      </section>
+      <section class="panel">
+        <h3>Rejected Checks</h3>
+        <div id="rejected-table" class="table-wrap"></div>
+      </section>
+    </section>
+
+    <section class="workspace" id="csv-workspace">
+      <div class="workspace-head">
+        <h2>CSV Site Scan</h2>
+        <div class="actions">
+          <button id="load-sample">Sample</button>
+          <button id="run-csv" class="primary">Run</button>
+          <button id="download-csv">Download</button>
+        </div>
+      </div>
+      <section class="panel inputs-panel">
+        <div class="file-row">
+          <input id="csv-file" type="file" accept=".csv,text/csv">
+          <span id="csv-file-name">No CSV loaded</span>
+        </div>
+        <div class="grid-six">
+          <label>Lat min <input id="bbox-lat-min" type="number" value="24" step="0.1"></label>
+          <label>Lat max <input id="bbox-lat-max" type="number" value="46" step="0.1"></label>
+          <label>Lon min <input id="bbox-lon-min" type="number" value="-82" step="0.1"></label>
+          <label>Lon max <input id="bbox-lon-max" type="number" value="-60" step="0.1"></label>
+          <label>Min depth <input id="min-depth" type="number" value="0" step="1"></label>
+          <label>Max rows <input id="max-rows" type="number" value="5000" step="100"></label>
+        </div>
+        <label class="inline-label">Max depth <input id="max-depth" type="number" value="500" step="10"></label>
+      </section>
+      <div id="csv-metrics" class="metric-grid"></div>
+      <section class="map-layout">
+        <div class="panel map-panel">
+          <h3>Map</h3>
+          <svg id="map-svg" role="img" aria-label="Anchor result map"></svg>
+        </div>
+        <div class="panel">
+          <h3>Distribution</h3>
+          <div id="distribution-chart" class="bar-chart"></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h3>Results</h3>
+        <div id="csv-table" class="table-wrap"></div>
+      </section>
+    </section>
+
+    <section class="workspace" id="array-workspace">
+      <div class="workspace-head">
+        <h2>Array Analysis</h2>
+        <button id="run-array" class="primary">Run</button>
+      </div>
+      <section class="panel inputs-panel">
+        <div class="grid-six">
+          <label>Length km <input id="site-length" type="number" value="5" step="0.1" min="0.1"></label>
+          <label>Width km <input id="site-width" type="number" value="3" step="0.1" min="0.1"></label>
+          <label>Spacing mode
+            <select id="spacing-mode">
+              <option value="user_defined" selected>User</option>
+              <option value="based_on_geometry">Geometry</option>
+            </select>
+          </label>
+          <label>Spacing m <input id="device-spacing" type="number" value="500" step="10" min="1"></label>
+          <label>Count model
+            <select id="array-count-model">
+              <option value="floor" selected>Floor</option>
+              <option value="plus1">Plus one</option>
+            </select>
+          </label>
+          <label>Lines/device <input id="lines-per-device" type="number" value="3" step="1" min="1"></label>
+        </div>
+      </section>
+      <div id="array-metrics" class="metric-grid"></div>
+      <section class="panel">
+        <h3>Cost Intensity</h3>
+        <div id="array-chart" class="bar-chart"></div>
+      </section>
+    </section>
+
+    <section class="workspace" id="param-workspace">
+      <div class="workspace-head">
+        <h2>Parametric Study</h2>
+        <div class="actions">
+          <button id="run-parametric" class="primary">Run</button>
+          <button id="download-parametric">Download</button>
+        </div>
+      </div>
+      <section class="panel inputs-panel">
+        <div class="grid-six">
+          <label>Variable
+            <select id="param-variable">
+              <option value="DesignLoad" selected>Design load</option>
+              <option value="LoadAngle">Load angle</option>
+              <option value="WaterDepth">Water depth</option>
+            </select>
+          </label>
+          <label>Start <input id="param-start" type="number" value="500" step="10"></label>
+          <label>Step <input id="param-step" type="number" value="250" step="10"></label>
+          <label>End <input id="param-end" type="number" value="5000" step="10"></label>
+        </div>
+      </section>
+      <section class="panel chart-panel">
+        <h3>Cost Intensity Lines</h3>
+        <svg id="param-chart" role="img" aria-label="Parametric cost chart"></svg>
+      </section>
+      <section class="panel">
+        <h3>Study Results</h3>
+        <div id="param-table" class="table-wrap"></div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span>Static browser app. Uploaded CSV data stays local to this session.</span>
+    <span>Screening-level model for early engineering comparison.</span>
+  </footer>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
