@@ -37,6 +37,8 @@ let lastArrayResult = null;
 let lastCsvSummary = null;
 let lastParamSummary = null;
 let lastReportHtml = "";
+let siteRunCount = 0;
+let siteRunButtonTimer = 0;
 
 const DEFAULT_HELP = "Hover or focus an option to see guidance.";
 
@@ -85,6 +87,8 @@ const HELP_TEXT = {
   "plot-soil": "Keep soil display enabled for CSV scan views.",
   "plot-share": "Show or hide cost-share style distribution output.",
   "run-site": "Run the single-site anchor selection with the current controls.",
+  "run-site-top": "Run the single-site anchor selection from the top of the control panel.",
+  "open-report-top": "Open the report workspace for the current analysis.",
   "download-site": "Download the latest single-site result as JSON.",
   "csv-file": "Upload a CSV with site coordinates, water depth, and sediment columns. Data stays in this browser session.",
   "load-sample": "Load the bundled sample CSV so you can test the scan workflow immediately.",
@@ -169,6 +173,46 @@ function setStatus(message, tone = "ok") {
   const el = $("#status-line");
   el.textContent = message;
   el.dataset.tone = tone;
+}
+
+function runStamp() {
+  return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+
+function updateSiteRunFeedback(message, tone = "ok") {
+  const feedback = $("#site-run-feedback");
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.dataset.tone = tone;
+  feedback.dataset.pulse = "false";
+  feedback.offsetHeight;
+  feedback.dataset.pulse = tone === "ok" ? "true" : "false";
+}
+
+function setSiteRunButtons(text) {
+  ["#run-site", "#run-site-top"].forEach(selector => {
+    const button = $(selector);
+    if (button) button.textContent = text;
+  });
+}
+
+function markSiteButtonComplete() {
+  setSiteRunButtons("Run complete");
+  clearTimeout(siteRunButtonTimer);
+  siteRunButtonTimer = window.setTimeout(() => {
+    const main = $("#run-site");
+    const top = $("#run-site-top");
+    if (main) main.textContent = "Run";
+    if (top) top.textContent = "Run Site";
+  }, 1100);
+}
+
+function requestSiteRun() {
+  clearTimeout(siteRunButtonTimer);
+  setSiteRunButtons("Running...");
+  setStatus("Running single-site analysis...");
+  updateSiteRunFeedback("Running single-site analysis with the current inputs.");
+  window.setTimeout(runSite, 0);
 }
 
 function setupHelp() {
@@ -428,7 +472,12 @@ function runSite() {
     const res = analyzeSite(cfg);
     lastSiteResult = { config: cfg, result: res };
     const flags = validationFlags(cfg, res);
-    setStatus("Single-site analysis complete.");
+    siteRunCount += 1;
+    const stamp = runStamp();
+    const runMessage = `Site run #${siteRunCount} complete at ${stamp}.`;
+    setStatus(runMessage);
+    updateSiteRunFeedback(`${runMessage} Best anchor: ${res.best.Type}; total system: ${formatMoney(res.perDevice.totalSystemCost_USD)}.`);
+    markSiteButtonComplete();
     renderDecisionSummary($("#decision-summary"), res, cfg, flags);
     renderValidation($("#validation-panel"), flags);
     const metrics = [
@@ -463,6 +512,7 @@ function runSite() {
     renderReportPreview();
   } catch (error) {
     renderDecisionError(error.message);
+    updateSiteRunFeedback(`Site run failed at ${runStamp()}: ${error.message}`, "bad");
     setStatus(error.message, "bad");
   }
 }
@@ -1084,7 +1134,12 @@ function setupTabs() {
 function setup() {
   setupTabs();
   setupHelp();
-  $("#run-site").addEventListener("click", runSite);
+  $("#run-site").addEventListener("click", requestSiteRun);
+  $("#run-site-top").addEventListener("click", requestSiteRun);
+  $("#open-report-top").addEventListener("click", () => {
+    activateWorkspace("report-workspace");
+    renderReportPreview();
+  });
   $("#run-csv").addEventListener("click", runCsvScan);
   $("#run-array").addEventListener("click", runArray);
   $("#run-parametric").addEventListener("click", runParametric);

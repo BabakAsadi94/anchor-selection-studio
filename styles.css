@@ -256,6 +256,17 @@ h3 {
   gap: 8px;
 }
 
+.quick-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 8px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
 .preset-button {
   min-height: 34px;
   padding: 0 10px;
@@ -550,6 +561,42 @@ h3 {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.run-feedback {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 11px;
+  border: 1px solid #c6dce2;
+  border-left: 4px solid var(--ocean);
+  border-radius: 8px;
+  background: #f4fbfc;
+  color: #42515c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.run-feedback[data-tone="bad"] {
+  border-color: #edc5bd;
+  border-left-color: var(--red);
+  background: #fff1ee;
+  color: #8a2d20;
+}
+
+.run-feedback[data-pulse="true"] {
+  animation: runPulse 800ms ease-out;
+}
+
+@keyframes runPulse {
+  0% {
+    background: #fff7f7;
+    border-left-color: var(--ncsu-red);
+  }
+  100% {
+    background: #f4fbfc;
+    border-left-color: var(--ocean);
+  }
 }
 
 .metric-grid {
