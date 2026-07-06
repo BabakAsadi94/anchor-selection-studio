@@ -21,6 +21,14 @@
   box-sizing: border-box;
 }
 
+*,
+*::before,
+*::after {
+  transition: none;
+  animation-duration: 0s;
+  animation-delay: 0s;
+}
+
 body {
   margin: 0;
   background: linear-gradient(180deg, #f9fbfc 0, #eef4f6 300px, var(--surface) 300px);
@@ -42,10 +50,12 @@ button {
   color: var(--ink);
   cursor: pointer;
   padding: 0 14px;
+  transform: none;
 }
 
 button:hover {
   border-color: var(--focus);
+  transform: none;
 }
 
 button:disabled {
@@ -95,7 +105,7 @@ label.has-help {
 }
 
 label.has-help:hover {
-  color: var(--ocean);
+  color: var(--muted);
 }
 
 h1,
@@ -280,7 +290,7 @@ h3 {
 }
 
 .preset-button:hover {
-  background: #fff7f7;
+  background: #fff;
   border-color: #efb4b4;
   color: var(--ncsu-red-dark);
 }
@@ -590,18 +600,8 @@ h3 {
 }
 
 .run-feedback[data-pulse="true"] {
-  animation: runPulse 800ms ease-out;
-}
-
-@keyframes runPulse {
-  0% {
-    background: #fff7f7;
-    border-left-color: var(--ncsu-red);
-  }
-  100% {
-    background: #f4fbfc;
-    border-left-color: var(--ocean);
-  }
+  background: #f4fbfc;
+  border-left-color: var(--ocean);
 }
 
 .metric-grid {
@@ -908,6 +908,23 @@ svg {
   min-height: 32px;
   background: #f8fbfc;
   color: #2d3a43;
+  transform: none;
+}
+
+.question-chip:hover {
+  background: #fff;
+  border-color: #efb4b4;
+  color: var(--ncsu-red-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none;
+    animation: none;
+    scroll-behavior: auto;
+  }
 }
 
 .guide-answer {

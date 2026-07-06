@@ -274,23 +274,17 @@ function setupHelp() {
     const show = () => showHelp(text);
     el.title = text;
     el.setAttribute("aria-describedby", "context-help");
-    el.addEventListener("mouseenter", show);
     el.addEventListener("focus", show);
     el.addEventListener("focusin", show);
     el.addEventListener("click", show);
     el.addEventListener("input", show);
-    el.addEventListener("mouseleave", () => {
-      if (!label || !label.matches(":hover")) resetHelp();
-    });
     el.addEventListener("blur", resetHelp);
 
     if (label) {
       label.classList.add("has-help");
       label.title = text;
-      label.addEventListener("mouseenter", show);
       label.addEventListener("focusin", show);
       label.addEventListener("click", show);
-      label.addEventListener("mouseleave", resetHelp);
       label.addEventListener("focusout", resetHelp);
     }
   });
