@@ -139,12 +139,78 @@
           </label>
         </div>
       </section>
+
+      <section class="control-group">
+        <h2>Advanced Selector</h2>
+        <div class="two-col">
+          <label>Phi deg
+            <input id="phi-deg" type="number" value="" placeholder="auto" step="1">
+          </label>
+          <label>Rho water
+            <input id="rho-water" type="number" value="1025" step="1" min="1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Chain diam mm
+            <input id="chain-diameter" type="number" value="76" step="1" min="1">
+          </label>
+          <label>Angle tol deg
+            <input id="angle-tol" type="number" value="1" step="0.1" min="0">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>Soil quotient
+            <input id="soil-quotient" type="number" value="" placeholder="auto" step="0.25">
+          </label>
+          <label class="check compact"><input id="use-mid-install" type="checkbox" checked> Mid install times</label>
+        </div>
+        <div class="two-col">
+          <label>VLA coeff a
+            <input id="vla-coeff-a" type="number" value="" placeholder="auto" step="0.000001">
+          </label>
+          <label>VLA coeff b
+            <input id="vla-coeff-b" type="number" value="" placeholder="auto" step="0.0001">
+          </label>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>LCOE & Outputs</h2>
+        <label class="check"><input id="compute-lcoe" type="checkbox"> Compute LCOE</label>
+        <div class="two-col">
+          <label>FCR
+            <input id="lcoe-fcr" type="number" value="0.108" step="0.001" min="0">
+          </label>
+          <label>Net CF
+            <input id="lcoe-cf" type="number" value="0.28" step="0.01" min="0" max="1">
+          </label>
+        </div>
+        <div class="two-col">
+          <label>OpEx USD/kW-yr
+            <input id="lcoe-opex" type="number" value="0" step="1" min="0">
+          </label>
+          <label>Out prefix
+            <input id="out-prefix" type="text" value="anchor_selection">
+          </label>
+        </div>
+        <div class="toggle-grid">
+          <label class="check"><input id="plot-map" type="checkbox" checked> Map</label>
+          <label class="check"><input id="plot-cost" type="checkbox" checked> Cost map</label>
+          <label class="check"><input id="plot-kw" type="checkbox" checked> USD/kW</label>
+          <label class="check"><input id="plot-box" type="checkbox" checked> Box plots</label>
+          <label class="check"><input id="plot-soil" type="checkbox" checked> Soil</label>
+          <label class="check"><input id="plot-share" type="checkbox" checked> Cost share</label>
+        </div>
+      </section>
     </aside>
 
     <section class="workspace active" id="site-workspace">
       <div class="workspace-head">
         <h2>Single Site</h2>
-        <button id="run-site" class="primary">Run</button>
+        <div class="actions">
+          <button id="run-site" class="primary">Run</button>
+          <button id="download-site">Download</button>
+        </div>
       </div>
       <div id="site-metrics" class="metric-grid"></div>
       <section class="panel">
@@ -175,6 +241,12 @@
           <input id="csv-file" type="file" accept=".csv,text/csv">
           <span id="csv-file-name">No CSV loaded</span>
         </div>
+        <label class="inline-label">CSV source mode
+          <select id="csv-source-mode">
+            <option value="csv_map_scan" selected>Map scan</option>
+            <option value="nearest_csv_site">Nearest site</option>
+          </select>
+        </label>
         <div class="grid-six">
           <label>Lat min <input id="bbox-lat-min" type="number" value="24" step="0.1"></label>
           <label>Lat max <input id="bbox-lat-max" type="number" value="46" step="0.1"></label>
@@ -225,6 +297,8 @@
             </select>
           </label>
           <label>Lines/device <input id="lines-per-device" type="number" value="3" step="1" min="1"></label>
+          <label class="check compact"><input id="compute-shared" type="checkbox" checked> Shared</label>
+          <label>Min spacing m <input id="min-shared-spacing" type="number" value="" placeholder="spacing" step="10" min="1"></label>
         </div>
       </section>
       <div id="array-metrics" class="metric-grid"></div>
@@ -249,11 +323,17 @@
               <option value="DesignLoad" selected>Design load</option>
               <option value="LoadAngle">Load angle</option>
               <option value="WaterDepth">Water depth</option>
+              <option value="DesignLoadAngle">Load + angle</option>
             </select>
           </label>
           <label>Start <input id="param-start" type="number" value="500" step="10"></label>
           <label>Step <input id="param-step" type="number" value="250" step="10"></label>
           <label>End <input id="param-end" type="number" value="5000" step="10"></label>
+          <label>Angle start <input id="param-angle-start" type="number" value="5" step="1"></label>
+          <label>Angle step <input id="param-angle-step" type="number" value="5" step="1"></label>
+          <label>Angle end <input id="param-angle-end" type="number" value="90" step="1"></label>
+          <label>Baseline depth <input id="param-baseline-depth" type="number" value="80" step="1" min="1"></label>
+          <label>Max points <input id="param-max-points" type="number" value="41" step="1" min="5"></label>
         </div>
       </section>
       <section class="panel chart-panel">

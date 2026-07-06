@@ -32,6 +32,7 @@ const colors = {
 let csvRows = [];
 let scanRows = [];
 let paramRows = [];
+let lastSiteResult = null;
 
 function value(id) {
   return $(`#${id}`)?.value;
@@ -44,6 +45,13 @@ function numberValue(id, fallback = NaN) {
 
 function checked(id) {
   return Boolean($(`#${id}`)?.checked);
+}
+
+function nullableNumber(id) {
+  const raw = value(id);
+  if (raw === undefined || raw === null || String(raw).trim() === "") return NaN;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 function setStatus(message, tone = "ok") {
@@ -63,8 +71,20 @@ function readBaseConfig() {
     longitude: numberValue("site-lon", DEFAULTS.longitude),
     safetyFactor: numberValue("safety-factor", DEFAULTS.safetyFactor),
     mblFactor: numberValue("mbl-factor", DEFAULTS.mblFactor),
+    phi_deg: nullableNumber("phi-deg"),
+    rhoWater: numberValue("rho-water", DEFAULTS.rhoWater),
+    chainDiameter_mm: numberValue("chain-diameter", DEFAULTS.chainDiameter_mm),
+    angleTol_deg: numberValue("angle-tol", DEFAULTS.angleTol_deg),
+    soilQuotient: nullableNumber("soil-quotient"),
+    vlaCoeffA: nullableNumber("vla-coeff-a"),
+    vlaCoeffB: nullableNumber("vla-coeff-b"),
+    useMidInstallTimes: checked("use-mid-install"),
     fxUsdPerEur: numberValue("fx", DEFAULTS.fxUsdPerEur),
     ratedPowerPerDevice_kW: numberValue("rated-power", DEFAULTS.ratedPowerPerDevice_kW),
+    computeLCOE: checked("compute-lcoe"),
+    lcoeFcr: numberValue("lcoe-fcr", DEFAULTS.lcoeFcr),
+    lcoeNetCapacityFactor: numberValue("lcoe-cf", DEFAULTS.lcoeNetCapacityFactor),
+    lcoeAnnualOpex_USD_per_kW_yr: numberValue("lcoe-opex", DEFAULTS.lcoeAnnualOpex_USD_per_kW_yr),
     useMooringCost: checked("use-mooring"),
     includeMooringInRanking: checked("include-mooring-ranking"),
     mooringMaterial: value("mooring-material"),
@@ -79,6 +99,17 @@ function readBaseConfig() {
     csvCraneCapacity_tonnes: numberValue("csv-crane", DEFAULTS.csvCraneCapacity_tonnes),
     ahvCraneCapacity_tonnes: numberValue("ahv-crane", DEFAULTS.ahvCraneCapacity_tonnes)
   };
+}
+
+function outPrefix() {
+  return String(value("out-prefix") || "anchor_selection").trim().replace(/[^A-Za-z0-9_-]+/g, "_") || "anchor_selection";
+}
+
+function applyPlotToggles() {
+  const mapLayout = document.querySelector(".map-layout");
+  if (mapLayout) mapLayout.style.display = checked("plot-map") || checked("plot-cost") || checked("plot-kw") || checked("plot-soil") ? "" : "none";
+  const distribution = $("#distribution-chart")?.closest(".panel");
+  if (distribution) distribution.style.display = checked("plot-box") || checked("plot-share") ? "" : "none";
 }
 
 function renderMetrics(container, metrics) {
@@ -134,8 +165,9 @@ function runSite() {
   try {
     const cfg = readBaseConfig();
     const res = analyzeSite(cfg);
+    lastSiteResult = { config: cfg, result: res };
     setStatus("Single-site analysis complete.");
-    renderMetrics($("#site-metrics"), [
+    const metrics = [
       { label: "Best anchor", value: res.best.Type },
       { label: "Variant", value: res.best.Variant },
       { label: "Total system", value: formatMoney(res.perDevice.totalSystemCost_USD) },
@@ -144,7 +176,9 @@ function runSite() {
       { label: "Mooring length", value: `${formatNumber(res.mooring.length_m, 1)} m` },
       { label: "MBL required", value: `${formatNumber(res.best.MBL_required_kN, 1)} kN` },
       { label: "UHC", value: `${formatNumber(res.best.UHC_kN, 1)} kN` }
-    ]);
+    ];
+    if (cfg.computeLCOE) metrics.push({ label: "M&A LCOE", value: `${formatMoney(res.perDevice.mooringAnchorLCOE_USD_per_MWh, 2)}/MWh` });
+    renderMetrics($("#site-metrics"), metrics);
     renderCandidateBars($("#candidate-chart"), res.candidates, cfg.fxUsdPerEur, Math.max(1, Math.round(cfg.numMooringLines)));
     renderTable($("#candidate-table"), res.candidates, [
       { key: "Type", label: "Type" },
@@ -189,6 +223,15 @@ function runCsvScan() {
     };
     const scan = scanCsvRows(csvRows, cfg);
     scanRows = scan.rows;
+    if (value("csv-source-mode") === "nearest_csv_site" && scanRows.length) {
+      const targetLat = cfg.latitude;
+      const targetLon = cfg.longitude;
+      const nearest = scanRows.reduce((best, row) => {
+        const d = Math.hypot((row.Lat - targetLat) * 111, (row.Lon - targetLon) * 111 * Math.cos(targetLat * Math.PI / 180));
+        return !best || d < best.d ? { row, d } : best;
+      }, null);
+      scanRows = nearest ? [{ ...nearest.row, NearestDistance_km: nearest.d }] : [];
+    }
     const ok = scanRows.filter(r => r.Status === "OK");
     const averageCost = ok.reduce((s, r) => s + r.TotalSystemCost_USD, 0) / Math.max(ok.length, 1);
     setStatus(`CSV scan complete: ${scanRows.length} retained rows.`);
@@ -198,10 +241,12 @@ function runCsvScan() {
       { label: "Average system", value: formatMoney(averageCost) },
       { label: "BBox removed", value: scan.removed.bbox.toLocaleString() },
       { label: "Depth removed", value: (scan.removed.shallow + scan.removed.deep + scan.removed.missingDepth).toLocaleString() },
-      { label: "Unknown soil", value: scan.removed.unknownSoil.toLocaleString() }
+      { label: "Unknown soil", value: scan.removed.unknownSoil.toLocaleString() },
+      { label: "Source mode", value: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan" }
     ]);
     renderDistribution($("#distribution-chart"), scan.distribution);
     renderMap($("#map-svg"), scanRows);
+    applyPlotToggles();
     renderTable($("#csv-table"), scanRows, [
       { key: "Lat", label: "Lat", format: v => formatNumber(v, 4) },
       { key: "Lon", label: "Lon", format: v => formatNumber(v, 4) },
@@ -209,7 +254,8 @@ function runCsvScan() {
       { key: "SoilType", label: "Soil" },
       { key: "BestAnchorType", label: "Best" },
       { key: "TotalSystemCost_USD", label: "Total USD", format: v => formatMoney(v) },
-      { key: "TotalCost_USD_per_kW", label: "USD/kW", format: v => formatMoney(v, 2) }
+      { key: "TotalCost_USD_per_kW", label: "USD/kW", format: v => formatMoney(v, 2) },
+      { key: "MooringAnchorLCOE_USD_per_MWh", label: "LCOE", format: v => formatMoney(v, 2) }
     ], 50);
   } catch (error) {
     setStatus(error.message, "bad");
@@ -295,7 +341,9 @@ function runArray() {
       deviceSpacingMode: value("spacing-mode"),
       deviceSpacing_m: numberValue("device-spacing", 500),
       arrayCountModel: value("array-count-model"),
-      linesPerDevice: numberValue("lines-per-device", numberValue("num-lines", 3))
+      linesPerDevice: numberValue("lines-per-device", numberValue("num-lines", 3)),
+      computeSharedAnchoring: checked("compute-shared"),
+      minimumRequiredSpacing_m: nullableNumber("min-shared-spacing")
     };
     const res = analyzeArray(cfg);
     setStatus("Array analysis complete.");
@@ -307,7 +355,10 @@ function runArray() {
       { label: "Non-shared", value: `${formatMoney(res.nonShared.total_USD_per_kW, 2)}/kW` },
       { label: "Shared", value: `${formatMoney(res.shared.total_USD_per_kW, 2)}/kW` },
       { label: "Non-shared anchors", value: res.anchorsNonShared.toLocaleString() },
-      { label: "Shared anchors", value: res.anchorsShared.toLocaleString() }
+      { label: "Shared anchors", value: Number.isFinite(res.anchorsShared) ? res.anchorsShared.toLocaleString() : "N/A" },
+      { label: "Spacing check", value: res.sharedSpacingFeasible ? "Pass" : "Fail" },
+      { label: "Non-shared LCOE", value: `${formatMoney(res.nonShared.lcoe_USD_per_MWh, 2)}/MWh` },
+      { label: "Shared LCOE", value: `${formatMoney(res.shared.lcoe_USD_per_MWh, 2)}/MWh` }
     ]);
     renderArrayBars($("#array-chart"), res);
   } catch (error) {
@@ -325,7 +376,7 @@ function renderArrayBars(container, res) {
     <div class="bar-row tall">
       <span class="bar-label">${row.label}</span>
       <div class="bar-track">
-        <div class="bar-fill" style="width:${Math.max(3, 100 * row.value / max)}%; background:${row.color}"></div>
+        <div class="bar-fill" style="width:${Number.isFinite(row.value) ? Math.max(3, 100 * row.value / max) : 0}%; background:${row.color}"></div>
       </div>
       <span class="bar-value">${formatMoney(row.value, 2)}/kW</span>
     </div>
@@ -333,13 +384,23 @@ function renderArrayBars(container, res) {
 }
 
 function valuesFromRange() {
-  const start = numberValue("param-start", 500);
-  const step = numberValue("param-step", 250);
-  const end = numberValue("param-end", 5000);
+  return rangeValues("param-start", "param-step", "param-end", numberValue("param-max-points", 41), 500, 250, 5000);
+}
+
+function rangeValues(startId, stepId, endId, maxPoints, defStart, defStep, defEnd) {
+  const start = numberValue(startId, defStart);
+  const step = numberValue(stepId, defStep);
+  const end = numberValue(endId, defEnd);
   const values = [];
   if (!(step > 0)) return [start];
   for (let v = start; v <= end + step / 1000; v += step) values.push(Number(v.toFixed(8)));
-  return values.slice(0, 200);
+  if (values.length <= maxPoints) return values;
+  const sampled = [];
+  for (let i = 0; i < maxPoints; i += 1) {
+    const idx = Math.round(i * (values.length - 1) / (maxPoints - 1));
+    sampled.push(values[idx]);
+  }
+  return Array.from(new Set(sampled));
 }
 
 function runParametric() {
@@ -349,6 +410,8 @@ function runParametric() {
       ...readBaseConfig(),
       parametricVariable: variable,
       parametricValues: valuesFromRange(),
+      parametricAngleValues: rangeValues("param-angle-start", "param-angle-step", "param-angle-end", numberValue("param-max-points", 41), 5, 5, 90),
+      waterDepth_m: numberValue("param-baseline-depth", numberValue("water-depth", DEFAULTS.waterDepth_m)),
       parametricSoils: SOIL_ORDER.filter(s => s !== "Rock")
     });
     paramRows = rows;
@@ -356,10 +419,14 @@ function runParametric() {
     renderParametricChart($("#param-chart"), rows, variable);
     renderTable($("#param-table"), rows, [
       { key: "SweepValue", label: variable, format: v => formatNumber(v, 1) },
+      { key: "MooringAngle_deg", label: "Angle", format: v => formatNumber(v, 1) },
+      { key: "DesignLoad_kN", label: "Load", format: v => formatNumber(v, 0) },
+      { key: "WaterDepth_m", label: "Depth", format: v => formatNumber(v, 1) },
       { key: "SoilType", label: "Soil" },
       { key: "BestAnchorType", label: "Best" },
       { key: "TotalSystemCost_USD", label: "Total USD", format: v => formatMoney(v) },
       { key: "TotalCost_USD_per_kW", label: "USD/kW", format: v => formatMoney(v, 2) },
+      { key: "MooringAnchorLCOE_USD_per_MWh", label: "LCOE", format: v => formatMoney(v, 2) },
       { key: "Status", label: "Status" }
     ], 80);
   } catch (error) {
@@ -452,12 +519,17 @@ function setup() {
   $("#load-sample").addEventListener("click", loadSampleCsv);
   $("#download-csv").addEventListener("click", () => {
     if (!scanRows.length) return setStatus("No CSV scan results to download.", "bad");
-    downloadText("anchor_scan_results.csv", toCsv(scanRows), "text/csv");
+    downloadText(`${outPrefix()}_scan_results.csv`, toCsv(scanRows), "text/csv");
     setStatus("CSV results downloaded.");
+  });
+  $("#download-site").addEventListener("click", () => {
+    if (!lastSiteResult) runSite();
+    downloadText(`${outPrefix()}_site_result.json`, JSON.stringify(lastSiteResult, null, 2), "application/json");
+    setStatus("Site result downloaded.");
   });
   $("#download-parametric").addEventListener("click", () => {
     if (!paramRows.length) return setStatus("No parametric results to download.", "bad");
-    downloadText("anchor_parametric_results.csv", toCsv(paramRows), "text/csv");
+    downloadText(`${outPrefix()}_parametric_results.csv`, toCsv(paramRows), "text/csv");
     setStatus("Parametric results downloaded.");
   });
   $("#csv-file").addEventListener("change", async event => {
@@ -469,6 +541,7 @@ function setup() {
     setStatus("CSV loaded.");
   });
   $$("#mooring-system, #length-model, #use-mooring").forEach(el => el.addEventListener("change", runSite));
+  $$("#plot-map, #plot-cost, #plot-kw, #plot-box, #plot-soil, #plot-share").forEach(el => el.addEventListener("change", applyPlotToggles));
   runSite();
 }
 

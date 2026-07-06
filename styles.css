@@ -198,6 +198,12 @@ h3 {
   gap: 9px;
 }
 
+.toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
 .check {
   min-height: 34px;
   display: flex;
@@ -477,6 +483,7 @@ svg {
 
   .metric-grid,
   .two-col,
+  .toggle-grid,
   .grid-six,
   .file-row {
     grid-template-columns: 1fr;

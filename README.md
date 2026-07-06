@@ -23,8 +23,12 @@ http://127.0.0.1:8765/
 - US9-style CSV upload and map scan
 - Soil classification from Gravel/Sand/Mud/Clay/FolkCde
 - Per-device USD and USD/kW reporting
+- Mooring + anchoring LCOE contribution
 - Array non-shared vs shared anchoring comparison
 - Parametric sweeps for design load, load angle, and water depth
+- Combined design-load/load-angle parametric sweep
+- Advanced selector overrides: phi, water density, soil quotient, VLA coefficients, chain diameter, install-time mode, angle tolerance
+- MATLAB-style plot/display toggles and output prefix
 - CSV result downloads
 - Fully static frontend with no server-side data handling
 
@@ -66,7 +70,9 @@ Then create a GitHub repository and add it as `origin`.
 
 ## Validation Status
 
-This is a JavaScript port of the MATLAB calculation logic intended for public-facing screening use. Before final engineering release, create golden test cases from MATLAB and compare:
+This is a JavaScript port of the MATLAB calculation logic intended for public-facing screening use. The interface exposes the MATLAB calculation options in browser form. MATLAB-only behaviors such as figure windows and `SaveOutputs` artifact folders are represented as browser display toggles and downloads.
+
+Before final engineering release, create golden test cases from MATLAB and compare:
 
 - best anchor type
 - variant and vessel

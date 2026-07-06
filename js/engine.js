@@ -62,6 +62,13 @@ const DEFAULTS = {
   longitude: -75,
   safetyFactor: 1.1,
   mblFactor: 1.0,
+  phi_deg: NaN,
+  rhoWater: 1025,
+  soilQuotient: NaN,
+  vlaCoeffA: NaN,
+  vlaCoeffB: NaN,
+  useMidInstallTimes: true,
+  angleTol_deg: 1.0,
   useMooringCost: true,
   includeMooringInRanking: true,
   mooringMaterial: "chain",
@@ -77,7 +84,13 @@ const DEFAULTS = {
   csvCraneCapacity_tonnes: 1000,
   ahvCraneCapacity_tonnes: 250,
   ratedPowerPerDevice_kW: 500,
-  fxUsdPerEur: 1.1
+  fxUsdPerEur: 1.1,
+  computeLCOE: false,
+  lcoeFcr: 0.108,
+  lcoeNetCapacityFactor: 0.28,
+  lcoeAnnualOpex_USD_per_kW_yr: 0,
+  computeSharedAnchoring: true,
+  minimumRequiredSpacing_m: NaN
 };
 
 function finiteNumber(value, fallback = NaN) {
@@ -273,7 +286,7 @@ function makeMooring(options, mblRequiredKN, uhcKN) {
   };
   if (!opt.useMooringCost) return mooring;
   const dMM = diameterFromMBL(opt.mooringMaterial, mblRequiredKN, opt.chainGradeFactor);
-  const tbl = mooringFromTable(opt.mooringMaterial, dMM, 1025, opt.chainGradeFactor);
+  const tbl = mooringFromTable(opt.mooringMaterial, dMM, opt.rhoWater, opt.chainGradeFactor);
   const length = mooringLengthFromOptions(opt);
   mooring.enabled = true;
   mooring.material = opt.mooringMaterial;
@@ -349,7 +362,7 @@ function selectAnchorMinCost(options) {
   const installTimes = opt.useMidInstallTimes === false ? K.install.full : K.install.mid;
   const rhoSteel = 7850;
   const rhoConcrete = 2400;
-  const rhoWater = 1025;
+  const rhoWater = opt.rhoWater;
   const nan = NaN;
   const addCandidate = addCandidateFactory(candidates, rejected, {
     soilCompat,
@@ -360,7 +373,7 @@ function selectAnchorMinCost(options) {
     ahvCap: opt.ahvCraneCapacity_tonnes
   });
 
-  const isAngleLE40 = ang <= 40 + 1;
+  const isAngleLE40 = ang <= 40 + opt.angleTol_deg;
   let pileRegime = "NONE";
   if (moorKey === "CAT") pileRegime = isAngleLE40 ? "SPREAD" : "NONE";
   else if (isTLP) pileRegime = "TLP";
@@ -506,7 +519,9 @@ function selectAnchorMinCost(options) {
     rejected.push({ AnchorType: "VLA", Reason: "Rejected by soil rule", Details: "VLA excluded for Gravel/Rock sizing bucket." });
   } else if (vlaAllowed) {
     let coeff = null;
-    if (Array.isArray(opt.vlaCoeffs) && opt.vlaCoeffs.length === 2) {
+    if (Number.isFinite(opt.vlaCoeffA) && Number.isFinite(opt.vlaCoeffB)) {
+      coeff = [opt.vlaCoeffA, opt.vlaCoeffB];
+    } else if (Array.isArray(opt.vlaCoeffs) && opt.vlaCoeffs.length === 2) {
       coeff = opt.vlaCoeffs;
     } else {
       const sq = finiteNumber(opt.soilQuotient, soilKey === "VSC" ? 1.75 : soilKey === "MC" ? 2.75 : NaN);
@@ -568,6 +583,14 @@ function selectAnchorMinCost(options) {
   return { best, candidates, rejected, mooring };
 }
 
+function lcoeFromCostPerKW(costUSDPerKW, options) {
+  const opt = { ...DEFAULTS, ...options };
+  if (!opt.computeLCOE || !Number.isFinite(costUSDPerKW)) return NaN;
+  const energyMWhPerKWYr = 8.766 * opt.lcoeNetCapacityFactor;
+  if (!(energyMWhPerKWYr > 0)) return NaN;
+  return (costUSDPerKW * opt.lcoeFcr + opt.lcoeAnnualOpex_USD_per_kW_yr) / energyMWhPerKWYr;
+}
+
 function analyzeSite(options) {
   const opt = { ...DEFAULTS, ...options };
   const result = selectAnchorMinCost(opt);
@@ -592,7 +615,8 @@ function analyzeSite(options) {
       installCost_USD: installEUR * fx,
       mooringCost_USD: mooringEUR * fx,
       totalSystemCost_USD: totalEUR * fx,
-      totalCost_USD_per_kW: Number.isFinite(rated) && rated > 0 ? totalEUR * fx / rated : NaN
+      totalCost_USD_per_kW: Number.isFinite(rated) && rated > 0 ? totalEUR * fx / rated : NaN,
+      mooringAnchorLCOE_USD_per_MWh: lcoeFromCostPerKW(Number.isFinite(rated) && rated > 0 ? totalEUR * fx / rated : NaN, opt)
     }
   };
 }
@@ -702,6 +726,7 @@ function scanCsvRows(rows, options) {
         MooringCost_USD: result.perDevice.mooringCost_USD,
         TotalSystemCost_USD: result.perDevice.totalSystemCost_USD,
         TotalCost_USD_per_kW: result.perDevice.totalCost_USD_per_kW,
+        MooringAnchorLCOE_USD_per_MWh: result.perDevice.mooringAnchorLCOE_USD_per_MWh,
         Status: "OK",
         Message: ""
       });
@@ -722,6 +747,7 @@ function scanCsvRows(rows, options) {
         MooringCost_USD: NaN,
         TotalSystemCost_USD: NaN,
         TotalCost_USD_per_kW: NaN,
+        MooringAnchorLCOE_USD_per_MWh: NaN,
         Status: "No feasible",
         Message: error.message
       });
@@ -784,7 +810,9 @@ function analyzeArray(options) {
   const rated = opt.ratedPowerPerDevice_kW;
   const totalPower = rated * Ndev;
   const anchorsNonShared = Ndev * lines;
-  const anchorsShared = sharedAnchorCount(Nx, Ny, lines);
+  const anchorsShared = opt.computeSharedAnchoring ? sharedAnchorCount(Nx, Ny, lines) : NaN;
+  const minimumSpacing = Number.isFinite(opt.minimumRequiredSpacing_m) ? opt.minimumRequiredSpacing_m : spacing;
+  const sharedSpacingFeasible = spacing >= minimumSpacing;
   const moorPerDeviceEUR = Number.isFinite(base.perDevice.mooringCost_EUR) ? base.perDevice.mooringCost_EUR : 0;
   const mooringArrayEUR = Ndev * moorPerDeviceEUR;
   const nonSharedAnchorEUR = anchorsNonShared * base.best.AnchorCost_EUR;
@@ -792,6 +820,7 @@ function analyzeArray(options) {
   const sharedLoad = sharedAnchorResultantLoad(opt.designLoad_kN, opt.mooringAngle_deg, opt.mooringSystem, lines);
   let sharedBest = null;
   try {
+    if (!opt.computeSharedAnchoring || !sharedSpacingFeasible) throw new Error("Shared anchoring disabled or spacing infeasible.");
     const shared = selectAnchorMinCost({
       ...opt,
       designLoad_kN: sharedLoad.Tshared_kN,
@@ -815,20 +844,24 @@ function analyzeArray(options) {
     totalPower_kW: totalPower,
     anchorsNonShared,
     anchorsShared,
+    minimumRequiredSpacing_m: minimumSpacing,
+    sharedSpacingFeasible,
     sharedLoad,
     nonShared: {
       anchorType: base.best.Type,
       anchorCostArray_USD: nonSharedAnchorEUR * fx,
       mooringCostArray_USD: mooringArrayEUR * fx,
       totalCostArray_USD: (nonSharedAnchorEUR + mooringArrayEUR) * fx,
-      total_USD_per_kW: (nonSharedAnchorEUR + mooringArrayEUR) * fx / totalPower
+      total_USD_per_kW: (nonSharedAnchorEUR + mooringArrayEUR) * fx / totalPower,
+      lcoe_USD_per_MWh: lcoeFromCostPerKW((nonSharedAnchorEUR + mooringArrayEUR) * fx / totalPower, opt)
     },
     shared: {
-      anchorType: sharedBest ? sharedBest.Type : "No feasible",
+      anchorType: opt.computeSharedAnchoring ? (sharedBest ? sharedBest.Type : (sharedSpacingFeasible ? "No feasible" : "Spacing infeasible")) : "Not computed",
       anchorCostArray_USD: sharedAnchorEUR * fx,
       mooringCostArray_USD: mooringArrayEUR * fx,
       totalCostArray_USD: Number.isFinite(sharedAnchorEUR) ? (sharedAnchorEUR + mooringArrayEUR) * fx : NaN,
-      total_USD_per_kW: Number.isFinite(sharedAnchorEUR) ? (sharedAnchorEUR + mooringArrayEUR) * fx / totalPower : NaN
+      total_USD_per_kW: Number.isFinite(sharedAnchorEUR) ? (sharedAnchorEUR + mooringArrayEUR) * fx / totalPower : NaN,
+      lcoe_USD_per_MWh: lcoeFromCostPerKW(Number.isFinite(sharedAnchorEUR) ? (sharedAnchorEUR + mooringArrayEUR) * fx / totalPower : NaN, opt)
     }
   };
 }
@@ -838,22 +871,33 @@ function parametricStudy(options) {
   const variable = opt.parametricVariable || "DesignLoad";
   const soils = opt.parametricSoils || ["Very Soft Clay", "Medium Clay", "Hard Clay", "Sand"];
   const values = opt.parametricValues || [500, 750, 1000, 1500, 2000, 3000, 4000, 5000];
+  const angleValues = opt.parametricAngleValues || [5, 10, 15, 20, 25, 30, 40, 60, 80, 90];
   const rows = [];
   for (const soil of soils) {
+    const outerValues = variable === "DesignLoadAngle" ? angleValues : [null];
+    for (const angleValue of outerValues) {
     for (const value of values) {
       const cfg = { ...opt, soilType: soil };
       if (variable === "WaterDepth") cfg.waterDepth_m = value;
       if (variable === "LoadAngle") cfg.mooringAngle_deg = value;
       if (variable === "DesignLoad") cfg.designLoad_kN = value;
+      if (variable === "DesignLoadAngle") {
+        cfg.designLoad_kN = value;
+        cfg.mooringAngle_deg = angleValue;
+      }
       try {
         const res = analyzeSite(cfg);
         rows.push({
           ParametricVariable: variable,
           SweepValue: value,
+          MooringAngle_deg: cfg.mooringAngle_deg,
+          DesignLoad_kN: cfg.designLoad_kN,
+          WaterDepth_m: cfg.waterDepth_m,
           SoilType: soil,
           BestAnchorType: res.best.Type,
           TotalSystemCost_USD: res.perDevice.totalSystemCost_USD,
           TotalCost_USD_per_kW: res.perDevice.totalCost_USD_per_kW,
+          MooringAnchorLCOE_USD_per_MWh: res.perDevice.mooringAnchorLCOE_USD_per_MWh,
           Status: "OK",
           Message: ""
         });
@@ -861,14 +905,19 @@ function parametricStudy(options) {
         rows.push({
           ParametricVariable: variable,
           SweepValue: value,
+          MooringAngle_deg: cfg.mooringAngle_deg,
+          DesignLoad_kN: cfg.designLoad_kN,
+          WaterDepth_m: cfg.waterDepth_m,
           SoilType: soil,
           BestAnchorType: "No feasible",
           TotalSystemCost_USD: NaN,
           TotalCost_USD_per_kW: NaN,
+          MooringAnchorLCOE_USD_per_MWh: NaN,
           Status: "No feasible",
           Message: error.message
         });
       }
+    }
     }
   }
   return rows;
