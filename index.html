@@ -455,22 +455,19 @@
       <section class="panel ask-panel">
         <div class="panel-head">
           <h3>Ask Guide</h3>
-          <span class="help-note">Static helper with ChatGPT handoff</span>
+          <span class="help-note">Built-in app assistant</span>
         </div>
-        <textarea id="ask-guide-input" rows="4" placeholder="Ask a question, for example: How do I run the analysis? What does DEA mean? How do I download a PDF report?"></textarea>
+        <textarea id="ask-guide-input" rows="4" aria-label="Ask Guide question" placeholder="Ask a question, for example: How do I run the analysis? What does DEA mean? How do I download a PDF report?"></textarea>
         <div class="question-chips">
           <button class="question-chip" type="button" data-question="How do I run a single-site analysis?">Run analysis</button>
           <button class="question-chip" type="button" data-question="How do I know the result worked?">Know it worked</button>
           <button class="question-chip" type="button" data-question="How do I download a PDF report?">PDF report</button>
           <button class="question-chip" type="button" data-question="What does the recommended anchor mean?">Recommended anchor</button>
-          <button class="question-chip" type="button" data-question="Can this app use ChatGPT directly?">GPT connection</button>
         </div>
         <div class="actions">
-          <button id="ask-guide-run" class="primary" type="button">Ask Guide</button>
-          <button id="copy-gpt-prompt" type="button">Copy GPT Prompt</button>
-          <button id="open-chatgpt" type="button">Open ChatGPT</button>
+          <button id="ask-guide-run" class="primary" type="button">Ask</button>
         </div>
-        <div id="ask-guide-answer" class="guide-answer">Ask a question or choose an example above.</div>
+        <div id="ask-guide-answer" class="guide-answer" aria-live="polite">Ask a question or choose an example above.</div>
       </section>
       <section class="guide-grid">
         <article class="guide-card">
@@ -479,7 +476,7 @@
         </article>
         <article class="guide-card">
           <h3>Inputs</h3>
-          <p>Load, angle, water depth, soil, mooring geometry, vessel limits, and cost assumptions drive the candidate ranking. Hover any option for field-level guidance.</p>
+          <p>Load, angle, water depth, soil, mooring geometry, vessel limits, and cost assumptions drive the candidate ranking. Click or focus any option for field-level guidance.</p>
         </article>
         <article class="guide-card">
           <h3>CSV Columns</h3>

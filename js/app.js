@@ -131,10 +131,8 @@ const HELP_TEXT = {
   "build-report": "Generate an executive summary from the latest site, CSV, array, and study results.",
   "download-report": "Download the generated executive report as a self-contained HTML file.",
   "download-report-pdf": "Download a PDF summary of the current executive report.",
-  "ask-guide-input": "Ask a question about how to use the app, interpret results, export reports, or connect to GPT.",
-  "ask-guide-run": "Answer the question using the built-in app guide.",
-  "copy-gpt-prompt": "Copy a detailed ChatGPT prompt with the current app context.",
-  "open-chatgpt": "Open ChatGPT in a new tab. Paste the copied prompt there for a full LLM answer."
+  "ask-guide-input": "Ask a question about how to use the app, interpret results, or export reports.",
+  "ask-guide-run": "Answer the question using the built-in app guide."
 };
 
 function value(id) {
@@ -1097,17 +1095,6 @@ function currentGuideContext() {
   return lines.join("\n");
 }
 
-function guidePrompt(question) {
-  return [
-    "You are helping a user understand Anchor Selection Studio, a browser-based screening tool for mooring and anchor selection.",
-    "Use the current app context and explain step-by-step. Be clear that this is screening-level and needs engineering validation for final design.",
-    "",
-    currentGuideContext(),
-    "",
-    `User question: ${question || "How do I use this app and interpret the results?"}`
-  ].join("\n");
-}
-
 function answerGuideQuestion(rawQuestion) {
   const q = String(rawQuestion || "").trim();
   const text = q.toLowerCase();
@@ -1198,42 +1185,23 @@ function answerGuideQuestion(rawQuestion) {
   }
   if (/(gpt|chatgpt|llm|ai|openai|api|key|assistant)/.test(text)) {
     return [
-      "About connecting to GPT:",
-      "This GitHub Pages app is static, so it should not contain an OpenAI API key. A key in browser JavaScript would be visible to the public.",
+      "About the in-app guide:",
+      "The Help box answers directly with a built-in guide, so users can ask workflow and interpretation questions without leaving the app.",
       "",
-      "Safe options:",
-      "1. Use Copy GPT Prompt, then paste it into ChatGPT.",
-      "2. Use Open ChatGPT to open ChatGPT in a new tab.",
-      "3. For a true in-app GPT assistant, add a small secure backend endpoint that stores the API key server-side and returns answers to this page.",
-      "",
-      "I added the static Ask Guide now so users can get immediate help without accounts or API keys."
+      "For a live AI model, the app would need a secure backend endpoint. API keys should not be placed in public browser JavaScript."
     ].join("\n");
   }
   return [
-    "I can help with running Site analysis, CSV scans, Array analysis, Study sweeps, interpreting anchors, reports/PDFs, and GPT connection options.",
+    "I can help with running Site analysis, CSV scans, Array analysis, Study sweeps, interpreting anchors, and reports/PDFs.",
     "",
     "Try asking one of these:",
     "- How do I run a single-site analysis?",
     "- How do I know the result worked?",
     "- How do I download a PDF report?",
     "- What does the recommended anchor mean?",
-    "- Can this app use ChatGPT directly?",
     "",
     context
   ].join("\n");
-}
-
-async function copyGuidePrompt() {
-  const question = value("ask-guide-input") || "How do I use this app and interpret the result?";
-  const prompt = guidePrompt(question);
-  try {
-    await navigator.clipboard.writeText(prompt);
-    setStatus("GPT prompt copied.");
-    $("#ask-guide-answer").textContent = "Copied a detailed GPT prompt with the current app context. Open ChatGPT and paste it there.";
-  } catch {
-    $("#ask-guide-answer").textContent = prompt;
-    setStatus("Clipboard blocked. Prompt shown in Ask Guide.", "bad");
-  }
 }
 
 function runAskGuide() {
@@ -1520,10 +1488,11 @@ function setup() {
     setStatus("PDF report downloaded.");
   });
   $("#ask-guide-run").addEventListener("click", runAskGuide);
-  $("#copy-gpt-prompt").addEventListener("click", copyGuidePrompt);
-  $("#open-chatgpt").addEventListener("click", () => {
-    window.open("https://chatgpt.com/", "_blank", "noopener");
-    setStatus("ChatGPT opened in a new tab.");
+  $("#ask-guide-input").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      runAskGuide();
+    }
   });
   $$(".question-chip").forEach(button => {
     button.addEventListener("click", () => {

@@ -31,8 +31,7 @@ http://127.0.0.1:8765/
 - MATLAB-style plot/display toggles and output prefix
 - CSV result downloads
 - NC State-branded header and in-app hover/focus guidance
-- Help tab with tutorial steps, example questions, and Ask Guide
-- ChatGPT handoff prompt for deeper LLM-based guidance without exposing API keys
+- Help tab with tutorial steps, example questions, and built-in Ask Guide answers
 - Scenario presets for baseline catenary, taut, TLP, and array cases
 - Decision-readiness summary with validation notes and ranking gap
 - Per-device cost breakdown and richer chart legends
@@ -40,11 +39,9 @@ http://127.0.0.1:8765/
 - Executive report builder with downloadable HTML and PDF summaries
 - Fully static frontend with no server-side data handling
 
-## Help and LLM Guidance
+## Help Guidance
 
-The Help tab includes a static Ask Guide that answers common workflow questions in the browser. It can also copy a detailed prompt with the current app context for ChatGPT.
-
-A true in-app GPT assistant should use a secure backend endpoint. Do not place an OpenAI API key in this static GitHub Pages frontend, because browser JavaScript is public.
+The Help tab includes a built-in Ask Guide that answers common workflow, interpretation, CSV, array, study, and report questions directly in the browser.
 
 ## Expected CSV Columns
 
