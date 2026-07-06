@@ -1121,18 +1121,6 @@ function answerGuideQuestion(rawQuestion) {
   if (!q) {
     return "Ask a question first, or click one of the example question buttons.";
   }
-  if (/(run|start|analysis|analyze|analyse|site)/.test(text)) {
-    return [
-      "To run a single-site analysis:",
-      "1. Set the Load Case inputs on the left: mooring system, angle, load, depth, power, soil, latitude, and longitude.",
-      "2. Adjust Mooring, Economics, Advanced Selector, and LCOE options if needed.",
-      "3. Click the red Run Site button.",
-      "4. The Site panel updates the recommended anchor, decision-readiness checks, metrics, candidate ranking, rejected checks, and cost breakdown.",
-      "5. If the app says the analysis is already up to date, the current results already match the current inputs.",
-      "",
-      context
-    ].join("\n");
-  }
   if (/(work|worked|valid|correct|know|success|happened|nothing)/.test(text)) {
     return [
       "How to know it worked:",
@@ -1143,6 +1131,18 @@ function answerGuideQuestion(rawQuestion) {
       "- Rejected Checks explains why some anchor types were not allowed.",
       "",
       "If you changed inputs, click Run Site again. If nothing changed, the previous result is already the current result."
+    ].join("\n");
+  }
+  if (/(run|start|analysis|analyze|analyse|site)/.test(text)) {
+    return [
+      "To run a single-site analysis:",
+      "1. Set the Load Case inputs on the left: mooring system, angle, load, depth, power, soil, latitude, and longitude.",
+      "2. Adjust Mooring, Economics, Advanced Selector, and LCOE options if needed.",
+      "3. Click the red Run Site button.",
+      "4. The Site panel updates the recommended anchor, decision-readiness checks, metrics, candidate ranking, rejected checks, and cost breakdown.",
+      "5. If the app says the analysis is already up to date, the current results already match the current inputs.",
+      "",
+      context
     ].join("\n");
   }
   if (/(pdf|report|download|export)/.test(text)) {
