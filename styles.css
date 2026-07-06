@@ -220,18 +220,51 @@ h3 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
-  gap: 6px;
-  padding: 6px;
+  gap: 10px;
+  padding: 10px;
   background: var(--surface-strong);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
+.nav-section {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-section.secondary {
+  padding-top: 8px;
+  border-top: 1px solid #d9e1e7;
+}
+
+.nav-heading {
+  color: #53616b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.primary-nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.support-nav {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .tab-button {
+  min-height: 40px;
   padding: 0 8px;
   background: transparent;
   border-color: transparent;
+  color: #25323b;
+  white-space: normal;
 }
 
 .tab-button.active {
@@ -239,6 +272,20 @@ h3 {
   border-color: #f0b7b7;
   color: var(--ncsu-red-dark);
   box-shadow: 0 1px 5px rgba(23, 32, 38, 0.08);
+}
+
+.tab-button.support {
+  min-height: 36px;
+  background: #f8fafb;
+  border-color: #dce4ea;
+  color: #42505a;
+  font-size: 13px;
+}
+
+.tab-button.support.active {
+  background: #fff;
+  border-color: #b9d7df;
+  color: var(--ocean);
 }
 
 .context-help {
@@ -273,7 +320,7 @@ h3 {
 
 .quick-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.75fr);
   gap: 8px;
   padding: 8px;
   background: #ffffff;
@@ -378,8 +425,8 @@ h3 {
   align-items: center;
   min-height: 58px;
   padding: 9px 10px;
-  background: #f9fbfc;
-  border: 1px solid #e3e9ee;
+  background: #fbfcfd;
+  border: 1px solid #e1e8ee;
   border-radius: 8px;
 }
 
@@ -393,6 +440,10 @@ h3 {
   background: var(--ocean);
   color: #fff;
   font-weight: 800;
+}
+
+.workflow-step:last-child span {
+  background: var(--ncsu-red);
 }
 
 .workflow-step strong {
@@ -1344,8 +1395,9 @@ tr:last-child td {
     text-align: left;
   }
 
-  .tabs {
-    grid-template-columns: repeat(3, 1fr);
+  .primary-nav,
+  .support-nav {
+    grid-template-columns: 1fr;
   }
 
   .app-shell {

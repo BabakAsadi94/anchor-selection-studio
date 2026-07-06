@@ -75,11 +75,11 @@ const HELP_TEXT = {
   "mooring-system": "Select the global mooring behavior. Catenary, taut, and TLP change load angle handling and mooring length assumptions.",
   "mooring-angle": "Angle between the load and seabed in degrees. Higher angles penalize or exclude anchor types that cannot take vertical load.",
   "design-load": "Design line load in kN before anchor safety factor is applied.",
-  "water-depth": "Water depth at the site in meters. This affects mooring length, CSV filtering, and cost intensity.",
+  "water-depth": "Water depth at the site in meters. This affects mooring length, multi-site filtering, and cost intensity.",
   "rated-power": "Rated power per device in kW. Used to normalize system cost to USD/kW and LCOE contribution.",
-  "soil-type": "Dominant seabed class used by the anchor selector. CSV scans infer this from sediment columns.",
-  "site-lat": "Latitude for the single-site run and nearest-site CSV search.",
-  "site-lon": "Longitude for the single-site run and nearest-site CSV search.",
+  "soil-type": "Dominant seabed class used by the anchor selector. Multi-site scans infer this from sediment columns.",
+  "site-lat": "Latitude for the single-site run and nearest-site multi-site search.",
+  "site-lon": "Longitude for the single-site run and nearest-site multi-site search.",
   "use-mooring": "Include mooring line cost in total system cost. Disable to inspect anchor-only economics.",
   "include-mooring-ranking": "When enabled, the best anchor is ranked by anchor plus mooring cost. Disable to rank anchor cost only.",
   "mooring-material": "Material used for mooring cost and mass estimates.",
@@ -108,37 +108,37 @@ const HELP_TEXT = {
   "lcoe-fcr": "Fixed charge rate used for annualizing capital cost in LCOE calculations.",
   "lcoe-cf": "Net capacity factor used to estimate annual energy production.",
   "lcoe-opex": "Annual operating cost adder in USD per kW-year for the LCOE contribution.",
-  "out-prefix": "Filename prefix used when downloading site, CSV, or parametric results.",
-  "plot-map": "Show or hide the CSV map-style visualization area.",
-  "plot-cost": "Keep cost-map display enabled for CSV scan views.",
-  "plot-kw": "Keep USD/kW display enabled for CSV scan views.",
+  "out-prefix": "Filename prefix used when downloading site, multi-site, or sensitivity results.",
+  "plot-map": "Show or hide the multi-site map visualization area.",
+  "plot-cost": "Keep cost-map display enabled for multi-site scan views.",
+  "plot-kw": "Keep USD/kW display enabled for multi-site scan views.",
   "plot-box": "Show or hide distribution-style summary plots.",
-  "plot-soil": "Keep soil display enabled for CSV scan views.",
+  "plot-soil": "Keep soil display enabled for multi-site scan views.",
   "plot-share": "Show or hide cost-share style distribution output.",
   "run-site": "Run the single-site anchor selection with the current controls.",
   "run-site-top": "Run the single-site anchor selection from the top of the control panel.",
   "open-report-top": "Open the report workspace for the current analysis.",
-  "open-help-top": "Open the Help page with tutorial steps and the Ask Guide assistant.",
+  "open-help-top": "Open the Guide page with tutorial steps and the Ask Guide assistant.",
   "download-site": "Download the latest single-site result as JSON.",
   "csv-file": "Upload a CSV with site coordinates, water depth, and sediment columns. Data stays in this browser session.",
   "load-sample": "Load the bundled sample CSV so you can test the scan workflow immediately.",
-  "run-csv": "Run the CSV scan using the current filters and shared load-case settings.",
-  "download-csv": "Download the latest CSV scan table as a CSV file.",
+  "run-csv": "Run the multi-site scan using the current filters and shared load-case settings.",
+  "download-csv": "Download the latest multi-site scan table as a CSV file.",
   "csv-source-mode": "Map scan evaluates retained rows; nearest site keeps the closest retained row to the current latitude and longitude.",
-  "bbox-lat-min": "Southern latitude bound for CSV map scan filtering.",
-  "bbox-lat-max": "Northern latitude bound for CSV map scan filtering.",
-  "bbox-lon-min": "Western longitude bound for CSV map scan filtering.",
-  "bbox-lon-max": "Eastern longitude bound for CSV map scan filtering.",
-  "min-depth": "Minimum water depth retained during CSV filtering.",
-  "max-depth": "Maximum water depth retained during CSV filtering.",
-  "max-rows": "Maximum number of CSV rows to retain after filtering. Use smaller values for faster public demos.",
+  "bbox-lat-min": "Southern latitude bound for multi-site map scan filtering.",
+  "bbox-lat-max": "Northern latitude bound for multi-site map scan filtering.",
+  "bbox-lon-min": "Western longitude bound for multi-site map scan filtering.",
+  "bbox-lon-max": "Eastern longitude bound for multi-site map scan filtering.",
+  "min-depth": "Minimum water depth retained during multi-site filtering.",
+  "max-depth": "Maximum water depth retained during multi-site filtering.",
+  "max-rows": "Maximum number of rows to retain after filtering. Use smaller values for faster public demos.",
   "map-mode-anchor": "Color map points by recommended anchor type.",
   "map-mode-cost": "Color map points by cost intensity in USD/kW.",
   "map-mode-soil": "Color map points by inferred seabed soil class.",
   "map-mode-depth": "Color map points by water depth.",
   "map-mode-feasible": "Color map points by feasibility status.",
-  "show-site-marker": "Show the current single-site latitude and longitude on the CSV map.",
-  "show-coastline": "Show the interactive public basemap behind CSV scan markers.",
+  "show-site-marker": "Show the current single-site latitude and longitude on the multi-site map.",
+  "show-coastline": "Show the interactive public basemap behind multi-site scan markers.",
   "download-map-png": "Download the current map view as a PNG image.",
   "download-map-svg": "Download the current map view as an SVG file.",
   "run-array": "Run the farm-level array comparison for non-shared and shared anchoring.",
@@ -151,11 +151,11 @@ const HELP_TEXT = {
   "compute-shared": "Enable shared anchoring estimates where adjacent devices can share anchor points.",
   "min-shared-spacing": "Minimum spacing required for shared anchoring. Leave blank to use the device spacing.",
   "run-parametric": "Run the sensitivity study for the selected variable and range.",
-  "download-parametric": "Download the latest parametric study table as a CSV file.",
+  "download-parametric": "Download the latest sensitivity study table as a CSV file.",
   "param-variable": "Select the variable to sweep: load, angle, depth, or combined load plus angle.",
-  "param-start": "Start value for the primary parametric sweep.",
-  "param-step": "Increment for the primary parametric sweep.",
-  "param-end": "End value for the primary parametric sweep.",
+  "param-start": "Start value for the primary sensitivity sweep.",
+  "param-step": "Increment for the primary sensitivity sweep.",
+  "param-end": "End value for the primary sensitivity sweep.",
   "param-angle-start": "Start angle for combined load-angle sweeps.",
   "param-angle-step": "Angle increment for combined load-angle sweeps.",
   "param-angle-end": "End angle for combined load-angle sweeps.",
@@ -165,7 +165,7 @@ const HELP_TEXT = {
   "scenario-taut": "Set a taut mooring case with inclined loading for deeper-water comparison.",
   "scenario-tlp": "Set a high-angle TLP case to exercise vertical-load anchor behavior.",
   "scenario-array": "Set a practical array demonstration with shared anchoring enabled.",
-  "build-report": "Generate an executive summary from the latest site, CSV, array, and study results.",
+  "build-report": "Generate an executive summary from the latest site, multi-site, array, and sensitivity results.",
   "download-report": "Download the generated executive report as a self-contained HTML file.",
   "download-report-pdf": "Download a PDF summary of the current executive report.",
   "ask-guide-input": "Ask a question about how to use the app, interpret results, or export reports.",
@@ -864,7 +864,7 @@ function runCsvScan() {
       removed: scan.removed
     };
     selectedMapRowIndex = bestMapRowIndex(scanRows);
-    setStatus(`CSV scan complete: ${scanRows.length} retained rows.`);
+    setStatus(`Multi-site scan complete: ${scanRows.length} retained rows.`);
     renderMetrics($("#csv-metrics"), [
       { label: "Used sites", value: scanRows.length.toLocaleString() },
       { label: "Feasible", value: ok.length.toLocaleString() },
@@ -1139,7 +1139,7 @@ function renderMapSiteDetail(row) {
   const pill = $("#map-selection-pill");
   if (!detail) return;
   if (!row) {
-    detail.textContent = "Run a CSV scan, then click a map point to inspect site-level inputs, recommendation, and cost.";
+    detail.textContent = "Run a multi-site scan, then click a map point to inspect site-level inputs, recommendation, and cost.";
     if (pill) {
       pill.textContent = "None";
       pill.className = "status-pill review";
@@ -1193,14 +1193,14 @@ function exportableMapSvgString() {
 
 function downloadMapSvg() {
   const svgText = exportableMapSvgString();
-  if (!svgText) return setStatus("Run a CSV scan before exporting the map.", "bad");
+  if (!svgText) return setStatus("Run a multi-site scan before exporting the map.", "bad");
   downloadText(`${outPrefix()}_${mapMode}_map.svg`, svgText, "image/svg+xml");
   setStatus("Map SVG downloaded.");
 }
 
 function downloadMapPng() {
   const svgText = exportableMapSvgString();
-  if (!svgText) return setStatus("Run a CSV scan before exporting the map.", "bad");
+  if (!svgText) return setStatus("Run a multi-site scan before exporting the map.", "bad");
   const svg = $("#map-svg");
   const viewBox = String(svg.getAttribute("viewBox") || "0 0 820 470").split(/\s+/).map(Number);
   const width = viewBox[2] || 820;
@@ -1347,7 +1347,7 @@ function runParametric() {
       rows: rows.length,
       feasible: rows.filter(row => row.Status === "OK").length
     };
-    setStatus("Parametric study complete.");
+    setStatus("Sensitivity study complete.");
     renderLegend($("#param-legend"), SOIL_ORDER.filter(soil => soil !== "Rock"));
     renderParametricChart($("#param-chart"), rows, variable);
     renderParametricNote(rows, variable);
@@ -1447,7 +1447,7 @@ function renderParametricNote(rows, variable) {
   if (!note) return;
   const ok = rows.filter(row => row.Status === "OK" && Number.isFinite(row.TotalCost_USD_per_kW));
   if (!ok.length) {
-    note.textContent = "No feasible parametric points for the current sweep.";
+    note.textContent = "No feasible sensitivity points for the current sweep.";
     return;
   }
   const costs = ok.map(row => row.TotalCost_USD_per_kW);
@@ -1460,7 +1460,7 @@ async function loadSampleCsv() {
   const text = await response.text();
   csvRows = parseCsv(text);
   $("#csv-file-name").textContent = `Sample loaded: ${csvRows.length} rows`;
-  setStatus("Sample CSV loaded.");
+  setStatus("Sample data loaded.");
 }
 
 function renderDecisionError(message) {
@@ -1587,9 +1587,9 @@ function currentGuideContext() {
   } else {
     lines.push("- Latest best anchor: not run yet");
   }
-  if (lastCsvSummary) lines.push(`- CSV scan: ${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible rows`);
+  if (lastCsvSummary) lines.push(`- Multi-site scan: ${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible rows`);
   if (lastArrayResult) lines.push(`- Array: ${lastArrayResult.result.Ndev.toLocaleString()} devices`);
-  if (lastParamSummary) lines.push(`- Study: ${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points`);
+  if (lastParamSummary) lines.push(`- Sensitivity: ${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points`);
   return lines.join("\n");
 }
 
@@ -1614,10 +1614,10 @@ function answerGuideQuestion(rawQuestion) {
   }
   if (/(multi[-\s]?site|multiple[-\s]?site|many sites|site batch|batch sites|regional|csv|map|upload|sample|site scan)/.test(text)) {
     return [
-      "To run multi-site analysis, use CSV Site Scan:",
-      "1. Open the CSV tab.",
+      "To run multi-site analysis, use Multi-Site Map Scan:",
+      "1. Open the Multi-Site tab.",
       "2. Upload a CSV with site coordinates, water depth, and sediment columns, or click Sample for the built-in demo data.",
-      "3. Choose CSV source mode: Map scan evaluates all retained rows; Nearest site keeps the closest retained row to the current latitude and longitude.",
+      "3. Choose scan mode: Map scan evaluates all retained rows; Nearest site keeps the closest retained row to the current latitude and longitude.",
       "4. Set the bounding box, depth filters, and max rows.",
       "5. Click Run.",
       "6. Use Map Studio to switch between Anchor, Cost, Soil, Depth, and Feasibility views.",
@@ -1644,7 +1644,7 @@ function answerGuideQuestion(rawQuestion) {
     return [
       "To create a report:",
       "1. Run Site first so the latest inputs have results.",
-      "2. Open the Report tab.",
+      "2. Open Report under Output & Guidance.",
       "3. Click Build.",
       "4. Click Download PDF for a PDF summary, or Download HTML for a browser-readable report.",
       "",
@@ -1677,8 +1677,8 @@ function answerGuideQuestion(rawQuestion) {
   }
   if (/(study|parametric|sweep|sensitivity)/.test(text)) {
     return [
-      "For a parametric study:",
-      "1. Open the Study tab.",
+      "For a sensitivity study:",
+      "1. Open the Sensitivity tab.",
       "2. Choose Design load, Load angle, Water depth, or Load + angle.",
       "3. Set start, step, end, and max points.",
       "4. Click Run.",
@@ -1694,7 +1694,7 @@ function answerGuideQuestion(rawQuestion) {
     ].join("\n");
   }
   return [
-    "I can help with running Site analysis, CSV scans, Array analysis, Study sweeps, interpreting anchors, and reports/PDFs.",
+    "I can help with running Site analysis, Multi-Site scans, Array analysis, Sensitivity sweeps, interpreting anchors, and reports/PDFs.",
     "",
     "Try asking one of these:",
     "- How do I run a single-site analysis?",
@@ -1767,9 +1767,9 @@ function reportFragment() {
     </table>
     <h4>Workflow Status</h4>
     <dl>
-      <dt>CSV scan</dt><dd>${escapeHtml(lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run")}</dd>
+      <dt>Multi-site scan</dt><dd>${escapeHtml(lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run")}</dd>
       <dt>Array analysis</dt><dd>${escapeHtml(lastArrayResult ? `${lastArrayResult.result.Ndev.toLocaleString()} devices, shared ${lastArrayResult.result.shared.anchorType}` : "Not run")}</dd>
-      <dt>Parametric study</dt><dd>${escapeHtml(lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run")}</dd>
+      <dt>Sensitivity study</dt><dd>${escapeHtml(lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run")}</dd>
     </dl>
     <h4>Validation Notes</h4>
     <ul class="validation-list">
@@ -1861,9 +1861,9 @@ function reportPdfLines() {
   });
   lines.push(
     { text: "Workflow Status", size: 14, bold: true, gap: 12 },
-    { text: `CSV scan: ${lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run"}` },
+    { text: `Multi-site scan: ${lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run"}` },
     { text: `Array analysis: ${lastArrayResult ? `${lastArrayResult.result.Ndev.toLocaleString()} devices, shared ${lastArrayResult.result.shared.anchorType}` : "Not run"}` },
-    { text: `Parametric study: ${lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run"}`, gap: 12 },
+    { text: `Sensitivity study: ${lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run"}`, gap: 12 },
     { text: "Validation Notes", size: 14, bold: true, gap: 6 }
   );
   flags.forEach(flag => lines.push({ text: `- ${flag.text}` }));
@@ -1971,7 +1971,7 @@ function setup() {
   });
   $("#open-help-top").addEventListener("click", () => {
     activateWorkspace("guide-workspace");
-    setStatus("Help opened.");
+    setStatus("Guide opened.");
   });
   $("#run-csv").addEventListener("click", runCsvScan);
   $("#run-array").addEventListener("click", runArray);
@@ -2020,9 +2020,9 @@ function setup() {
     });
   });
   $("#download-csv").addEventListener("click", () => {
-    if (!scanRows.length) return setStatus("No CSV scan results to download.", "bad");
+    if (!scanRows.length) return setStatus("No multi-site scan results to download.", "bad");
     downloadText(`${outPrefix()}_scan_results.csv`, toCsv(scanRows), "text/csv");
-    setStatus("CSV results downloaded.");
+    setStatus("Multi-site results downloaded.");
   });
   $("#download-site").addEventListener("click", () => {
     if (!lastSiteResult) runSite();
@@ -2030,9 +2030,9 @@ function setup() {
     setStatus("Site result downloaded.");
   });
   $("#download-parametric").addEventListener("click", () => {
-    if (!paramRows.length) return setStatus("No parametric results to download.", "bad");
-    downloadText(`${outPrefix()}_parametric_results.csv`, toCsv(paramRows), "text/csv");
-    setStatus("Parametric results downloaded.");
+    if (!paramRows.length) return setStatus("No sensitivity results to download.", "bad");
+    downloadText(`${outPrefix()}_sensitivity_results.csv`, toCsv(paramRows), "text/csv");
+    setStatus("Sensitivity results downloaded.");
   });
   $("#csv-file").addEventListener("change", async event => {
     const file = event.target.files[0];
@@ -2040,7 +2040,7 @@ function setup() {
     const text = await file.text();
     csvRows = parseCsv(text);
     $("#csv-file-name").textContent = `${file.name}: ${csvRows.length.toLocaleString()} rows`;
-    setStatus("CSV loaded.");
+    setStatus("Data file loaded.");
   });
   $$(".control-panel input, .control-panel select").forEach(el => {
     if (el.id.startsWith("plot-")) return;
