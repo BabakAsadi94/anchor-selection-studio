@@ -33,6 +33,10 @@ let csvRows = [];
 let scanRows = [];
 let paramRows = [];
 let lastSiteResult = null;
+let lastArrayResult = null;
+let lastCsvSummary = null;
+let lastParamSummary = null;
+let lastReportHtml = "";
 
 const DEFAULT_HELP = "Hover or focus an option to see guidance.";
 
@@ -113,7 +117,13 @@ const HELP_TEXT = {
   "param-angle-step": "Angle increment for combined load-angle sweeps.",
   "param-angle-end": "End angle for combined load-angle sweeps.",
   "param-baseline-depth": "Water depth used as the baseline when the sweep variable is not water depth.",
-  "param-max-points": "Maximum sampled points per sweep to keep charts responsive in the browser."
+  "param-max-points": "Maximum sampled points per sweep to keep charts responsive in the browser.",
+  "scenario-baseline": "Set a conservative catenary baseline for quick single-site screening.",
+  "scenario-taut": "Set a taut mooring case with inclined loading for deeper-water comparison.",
+  "scenario-tlp": "Set a high-angle TLP case to exercise vertical-load anchor behavior.",
+  "scenario-array": "Set a practical array demonstration with shared anchoring enabled.",
+  "build-report": "Generate an executive summary from the latest site, CSV, array, and study results.",
+  "download-report": "Download the generated executive report as a self-contained HTML file."
 };
 
 function value(id) {
@@ -134,6 +144,25 @@ function nullableNumber(id) {
   if (raw === undefined || raw === null || String(raw).trim() === "") return NaN;
   const n = Number(raw);
   return Number.isFinite(n) ? n : NaN;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function setInputValue(id, nextValue) {
+  const el = document.getElementById(id);
+  if (el) el.value = nextValue;
+}
+
+function setInputChecked(id, nextValue) {
+  const el = document.getElementById(id);
+  if (el) el.checked = Boolean(nextValue);
 }
 
 function setStatus(message, tone = "ok") {
@@ -225,6 +254,118 @@ function outPrefix() {
   return String(value("out-prefix") || "anchor_selection").trim().replace(/[^A-Za-z0-9_-]+/g, "_") || "anchor_selection";
 }
 
+function rankedCost(candidate, cfg) {
+  const key = cfg.includeMooringInRanking ? "TotalSystemCost_EUR" : "AnchorCost_EUR";
+  return candidate[key] * cfg.fxUsdPerEur;
+}
+
+function decisionReadiness(flags) {
+  if (flags.some(flag => flag.tone === "bad")) return { tone: "bad", label: "Needs Input Fix" };
+  if (flags.some(flag => flag.tone === "review")) return { tone: "review", label: "Engineering Review" };
+  return { tone: "ok", label: "Screening Ready" };
+}
+
+function validationFlags(cfg, res) {
+  const flags = [];
+  if (res.candidates.length >= 3) {
+    flags.push({ tone: "ok", text: `${res.candidates.length} feasible anchor candidates available for comparison.` });
+  } else {
+    flags.push({ tone: "review", text: `Only ${res.candidates.length} feasible candidate${res.candidates.length === 1 ? "" : "s"} returned; review assumptions and site constraints.` });
+  }
+  if (res.rejected.length) {
+    flags.push({ tone: "review", text: `${res.rejected.length} candidate checks were rejected by soil, angle, geometry, or vessel rules.` });
+  } else {
+    flags.push({ tone: "ok", text: "No candidate rejection checks were triggered." });
+  }
+  if (cfg.enforceCraneCapacity) {
+    flags.push({ tone: "ok", text: "Vessel crane capacity limits are enforced." });
+  } else {
+    flags.push({ tone: "review", text: "Vessel crane capacity limits are disabled." });
+  }
+  if (cfg.computeLCOE) {
+    flags.push({ tone: "ok", text: "LCOE contribution is enabled for finance-normalized comparison." });
+  } else {
+    flags.push({ tone: "review", text: "LCOE contribution is disabled; outputs are cost-only." });
+  }
+  flags.push({ tone: "review", text: "Screening model: final release should be checked against golden MATLAB regression cases and project geotechnical review." });
+  return flags;
+}
+
+function renderValidation(container, flags) {
+  if (!container) return;
+  const readiness = decisionReadiness(flags);
+  container.innerHTML = `
+    <h3>Decision Readiness</h3>
+    <span class="status-pill ${readiness.tone === "ok" ? "" : readiness.tone}">${escapeHtml(readiness.label)}</span>
+    <ul class="validation-list">
+      ${flags.map(flag => `<li class="${flag.tone}">${escapeHtml(flag.text)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderDecisionSummary(container, res, cfg, flags) {
+  if (!container) return;
+  const readiness = decisionReadiness(flags);
+  const best = res.best;
+  const second = res.candidates[1];
+  const bestCost = rankedCost(res.candidates[0], cfg);
+  const secondCost = second ? rankedCost(second, cfg) : NaN;
+  const gap = Number.isFinite(secondCost) && bestCost > 0 ? 100 * (secondCost - bestCost) / bestCost : NaN;
+  const gapText = Number.isFinite(gap) ? `${formatNumber(gap, 1)}% gap to next` : "single feasible candidate";
+  container.innerHTML = `
+    <h3>Recommended Anchor</h3>
+    <div class="decision-title">
+      <strong>${escapeHtml(best.Type)}</strong>
+      <span class="status-pill ${readiness.tone === "ok" ? "" : readiness.tone}">${escapeHtml(gapText)}</span>
+    </div>
+    <p class="decision-detail">${escapeHtml(best.Variant)} using ${escapeHtml(best.Vessel)} installation. ${escapeHtml(readiness.label)} for screening-level comparison.</p>
+    <div class="decision-facts">
+      <div class="decision-fact"><span>Total System</span><strong>${escapeHtml(formatMoney(res.perDevice.totalSystemCost_USD))}</strong></div>
+      <div class="decision-fact"><span>Cost Intensity</span><strong>${escapeHtml(formatMoney(res.perDevice.totalCost_USD_per_kW, 2))}/kW</strong></div>
+      <div class="decision-fact"><span>Mass</span><strong>${escapeHtml(formatNumber(best.Mass_kg / 1000, 2))} t</strong></div>
+    </div>
+  `;
+}
+
+function renderLegend(container, keys) {
+  if (!container) return;
+  container.innerHTML = keys.map(key => `
+    <span class="legend-item"><span class="legend-swatch" style="background:${colors[key] || "#555"}"></span>${escapeHtml(key)}</span>
+  `).join("");
+}
+
+function renderCostBreakdown(container, res) {
+  if (!container) return;
+  const components = [
+    { label: "Fabrication", value: res.perDevice.fabCost_USD, color: "#0f6b7e" },
+    { label: "Installation", value: res.perDevice.installCost_USD, color: "#cc0000" },
+    { label: "Mooring", value: Number.isFinite(res.perDevice.mooringCost_USD) ? res.perDevice.mooringCost_USD : 0, color: "#2e9f6e" }
+  ];
+  const total = components.reduce((sum, item) => sum + (Number.isFinite(item.value) ? item.value : 0), 0);
+  if (!(total > 0)) {
+    container.innerHTML = `<div class="empty">No cost breakdown available.</div>`;
+    return;
+  }
+  container.innerHTML = components.map(item => {
+    const width = Math.max(0, 100 * item.value / total);
+    return `
+      <div class="breakdown-row">
+        <span class="breakdown-label">${escapeHtml(item.label)}</span>
+        <div class="breakdown-track">
+          <span class="breakdown-fill" style="width:${width}%; background:${item.color}"></span>
+        </div>
+        <span class="breakdown-value">${escapeHtml(formatMoney(item.value))} (${escapeHtml(formatNumber(width, 1))}%)</span>
+      </div>
+    `;
+  }).join("") + `
+    <div class="breakdown-row">
+      <span class="breakdown-label">Total</span>
+      <div class="breakdown-track"><span class="breakdown-fill" style="width:100%; background:#48545d"></span></div>
+      <span class="breakdown-value">${escapeHtml(formatMoney(total))}</span>
+    </div>
+  `;
+}
+
 function applyPlotToggles() {
   const mapLayout = document.querySelector(".map-layout");
   if (mapLayout) mapLayout.style.display = checked("plot-map") || checked("plot-cost") || checked("plot-kw") || checked("plot-soil") ? "" : "none";
@@ -235,8 +376,8 @@ function applyPlotToggles() {
 function renderMetrics(container, metrics) {
   container.innerHTML = metrics.map(item => `
     <div class="metric">
-      <span>${item.label}</span>
-      <strong>${item.value}</strong>
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
     </div>
   `).join("");
 }
@@ -253,11 +394,11 @@ function renderCandidateBars(container, candidates, fx, lines) {
     const width = Math.max(4, 100 * valueUSD / max);
     return `
       <div class="bar-row">
-        <span class="bar-label">${candidate.Type}</span>
+        <span class="bar-label">${escapeHtml(candidate.Type)}</span>
         <div class="bar-track">
           <div class="bar-fill" style="width:${width}%; background:${colors[candidate.Type] || "#555"}"></div>
         </div>
-        <span class="bar-value">${formatMoney(valueUSD)}</span>
+        <span class="bar-value">${escapeHtml(formatMoney(valueUSD))}</span>
       </div>
     `;
   }).join("");
@@ -271,10 +412,10 @@ function renderTable(container, rows, columns, limit = 20) {
   const view = rows.slice(0, limit);
   container.innerHTML = `
     <table>
-      <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join("")}</tr></thead>
+      <thead><tr>${columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr></thead>
       <tbody>
         ${view.map(row => `
-          <tr>${columns.map(c => `<td>${c.format ? c.format(row[c.key], row) : row[c.key]}</td>`).join("")}</tr>
+          <tr>${columns.map(c => `<td>${escapeHtml(c.format ? c.format(row[c.key], row) : row[c.key])}</td>`).join("")}</tr>
         `).join("")}
       </tbody>
     </table>
@@ -286,7 +427,10 @@ function runSite() {
     const cfg = readBaseConfig();
     const res = analyzeSite(cfg);
     lastSiteResult = { config: cfg, result: res };
+    const flags = validationFlags(cfg, res);
     setStatus("Single-site analysis complete.");
+    renderDecisionSummary($("#decision-summary"), res, cfg, flags);
+    renderValidation($("#validation-panel"), flags);
     const metrics = [
       { label: "Best anchor", value: res.best.Type },
       { label: "Variant", value: res.best.Variant },
@@ -299,7 +443,9 @@ function runSite() {
     ];
     if (cfg.computeLCOE) metrics.push({ label: "M&A LCOE", value: `${formatMoney(res.perDevice.mooringAnchorLCOE_USD_per_MWh, 2)}/MWh` });
     renderMetrics($("#site-metrics"), metrics);
+    renderLegend($("#candidate-legend"), ANCHOR_ORDER.filter(type => res.candidates.some(candidate => candidate.Type === type)));
     renderCandidateBars($("#candidate-chart"), res.candidates, cfg.fxUsdPerEur, Math.max(1, Math.round(cfg.numMooringLines)));
+    renderCostBreakdown($("#cost-breakdown"), res);
     renderTable($("#candidate-table"), res.candidates, [
       { key: "Type", label: "Type" },
       { key: "Variant", label: "Variant" },
@@ -314,7 +460,9 @@ function runSite() {
       { key: "Reason", label: "Reason" },
       { key: "Details", label: "Details" }
     ], 12);
+    renderReportPreview();
   } catch (error) {
+    renderDecisionError(error.message);
     setStatus(error.message, "bad");
   }
 }
@@ -354,6 +502,14 @@ function runCsvScan() {
     }
     const ok = scanRows.filter(r => r.Status === "OK");
     const averageCost = ok.reduce((s, r) => s + r.TotalSystemCost_USD, 0) / Math.max(ok.length, 1);
+    const distribution = anchorDistribution(scanRows);
+    lastCsvSummary = {
+      retained: scanRows.length,
+      feasible: ok.length,
+      averageCost,
+      mode: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan",
+      removed: scan.removed
+    };
     setStatus(`CSV scan complete: ${scanRows.length} retained rows.`);
     renderMetrics($("#csv-metrics"), [
       { label: "Used sites", value: scanRows.length.toLocaleString() },
@@ -364,8 +520,10 @@ function runCsvScan() {
       { label: "Unknown soil", value: scan.removed.unknownSoil.toLocaleString() },
       { label: "Source mode", value: value("csv-source-mode") === "nearest_csv_site" ? "Nearest" : "Map scan" }
     ]);
-    renderDistribution($("#distribution-chart"), scan.distribution);
+    renderDistribution($("#distribution-chart"), distribution);
+    renderLegend($("#map-legend"), ANCHOR_ORDER.filter(type => distribution.some(item => item.type === type && item.count > 0)));
     renderMap($("#map-svg"), scanRows);
+    renderMapNote(scanRows);
     applyPlotToggles();
     renderTable($("#csv-table"), scanRows, [
       { key: "Lat", label: "Lat", format: v => formatNumber(v, 4) },
@@ -377,6 +535,7 @@ function runCsvScan() {
       { key: "TotalCost_USD_per_kW", label: "USD/kW", format: v => formatMoney(v, 2) },
       { key: "MooringAnchorLCOE_USD_per_MWh", label: "LCOE", format: v => formatMoney(v, 2) }
     ], 50);
+    renderReportPreview();
   } catch (error) {
     setStatus(error.message, "bad");
   }
@@ -386,11 +545,11 @@ function renderDistribution(container, distribution) {
   const max = Math.max(...distribution.map(d => d.count), 1);
   container.innerHTML = distribution.map(d => `
     <div class="bar-row">
-      <span class="bar-label">${d.type}</span>
+      <span class="bar-label">${escapeHtml(d.type)}</span>
       <div class="bar-track">
         <div class="bar-fill" style="width:${Math.max(2, 100 * d.count / max)}%; background:${colors[d.type] || "#555"}"></div>
       </div>
-      <span class="bar-value">${d.count} (${formatNumber(d.percent, 1)}%)</span>
+      <span class="bar-value">${escapeHtml(d.count)} (${escapeHtml(formatNumber(d.percent, 1))}%)</span>
     </div>
   `).join("");
 }
@@ -408,8 +567,20 @@ function renderMap(svg, rows) {
   const maxLat = Math.max(...lats);
   const minLon = Math.min(...lons);
   const maxLon = Math.max(...lons);
+  const costs = rows.map(r => r.TotalCost_USD_per_kW).filter(Number.isFinite);
+  const minCost = costs.length ? Math.min(...costs) : NaN;
+  const maxCost = costs.length ? Math.max(...costs) : NaN;
   const sx = lon => pad + (lon - minLon) / Math.max(maxLon - minLon, 1e-9) * (width - 2 * pad);
   const sy = lat => height - pad - (lat - minLat) / Math.max(maxLat - minLat, 1e-9) * (height - 2 * pad);
+  const addText = (text, x, y, cls, anchor = "middle") => {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    el.textContent = text;
+    el.setAttribute("x", x);
+    el.setAttribute("y", y);
+    el.setAttribute("class", cls);
+    el.setAttribute("text-anchor", anchor);
+    svg.appendChild(el);
+  };
 
   const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   bg.setAttribute("x", "0");
@@ -438,11 +609,20 @@ function renderMap(svg, rows) {
     svg.appendChild(hLine);
   }
 
+  addText(`${formatNumber(minLon, 2)} lon`, pad, height - 10, "axis-text", "start");
+  addText(`${formatNumber(maxLon, 2)} lon`, width - pad, height - 10, "axis-text", "end");
+  addText(`${formatNumber(minLat, 2)} lat`, 8, height - pad, "axis-text", "start");
+  addText(`${formatNumber(maxLat, 2)} lat`, 8, pad + 4, "axis-text", "start");
+  addText("Point color = best anchor; point size = USD/kW", width / 2, 20, "axis-title");
+
   rows.forEach(row => {
     const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    const cost = row.TotalCost_USD_per_kW;
+    const norm = Number.isFinite(cost) && Number.isFinite(minCost) && maxCost > minCost ? (cost - minCost) / (maxCost - minCost) : 0.35;
+    const radius = rows.length > 2500 ? 2.1 : 2.8 + 3.8 * norm;
     point.setAttribute("cx", sx(row.Lon));
     point.setAttribute("cy", sy(row.Lat));
-    point.setAttribute("r", rows.length > 2500 ? 2.2 : 3.7);
+    point.setAttribute("r", radius);
     point.setAttribute("fill", colors[row.BestAnchorType] || "#333");
     point.setAttribute("opacity", row.Status === "OK" ? "0.82" : "0.45");
     const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
@@ -450,6 +630,18 @@ function renderMap(svg, rows) {
     point.appendChild(title);
     svg.appendChild(point);
   });
+}
+
+function renderMapNote(rows) {
+  const note = $("#map-note");
+  if (!note) return;
+  const ok = rows.filter(row => row.Status === "OK" && Number.isFinite(row.TotalCost_USD_per_kW));
+  if (!ok.length) {
+    note.textContent = "No feasible cost-intensity points available for the current scan.";
+    return;
+  }
+  const costs = ok.map(row => row.TotalCost_USD_per_kW);
+  note.textContent = `Cost intensity range: ${formatMoney(Math.min(...costs), 2)}/kW to ${formatMoney(Math.max(...costs), 2)}/kW across ${ok.length.toLocaleString()} feasible site${ok.length === 1 ? "" : "s"}.`;
 }
 
 function runArray() {
@@ -466,6 +658,7 @@ function runArray() {
       minimumRequiredSpacing_m: nullableNumber("min-shared-spacing")
     };
     const res = analyzeArray(cfg);
+    lastArrayResult = { config: cfg, result: res };
     setStatus("Array analysis complete.");
     renderMetrics($("#array-metrics"), [
       { label: "Devices", value: res.Ndev.toLocaleString() },
@@ -480,10 +673,38 @@ function runArray() {
       { label: "Non-shared LCOE", value: `${formatMoney(res.nonShared.lcoe_USD_per_MWh, 2)}/MWh` },
       { label: "Shared LCOE", value: `${formatMoney(res.shared.lcoe_USD_per_MWh, 2)}/MWh` }
     ]);
+    renderArrayReadiness($("#array-readiness"), res);
     renderArrayBars($("#array-chart"), res);
+    renderReportPreview();
   } catch (error) {
     setStatus(error.message, "bad");
   }
+}
+
+function renderArrayReadiness(container, res) {
+  if (!container) return;
+  const sharedSavings = Number.isFinite(res.shared.total_USD_per_kW)
+    ? 100 * (res.nonShared.total_USD_per_kW - res.shared.total_USD_per_kW) / Math.max(res.nonShared.total_USD_per_kW, 1e-9)
+    : NaN;
+  const tone = !res.sharedSpacingFeasible || !Number.isFinite(res.shared.total_USD_per_kW) ? "review" : sharedSavings > 0 ? "ok" : "review";
+  container.innerHTML = `
+    <div class="decision-summary">
+      <h3>Array Recommendation</h3>
+      <div class="decision-title">
+        <strong>${escapeHtml(Number.isFinite(sharedSavings) && sharedSavings > 0 ? "Shared" : "Non-shared")}</strong>
+        <span class="status-pill ${tone === "ok" ? "" : tone}">${escapeHtml(Number.isFinite(sharedSavings) ? `${formatNumber(Math.abs(sharedSavings), 1)}% ${sharedSavings >= 0 ? "lower" : "higher"}` : "review shared case")}</span>
+      </div>
+      <p class="decision-detail">Layout ${escapeHtml(res.Nx)} x ${escapeHtml(res.Ny)} with ${escapeHtml(res.Ndev.toLocaleString())} devices and ${escapeHtml(formatNumber(res.spacing_m, 1))} m spacing.</p>
+    </div>
+    <div class="validation-panel">
+      <h3>Array Checks</h3>
+      <ul class="validation-list">
+        <li class="${res.sharedSpacingFeasible ? "ok" : "bad"}">Shared spacing ${escapeHtml(res.sharedSpacingFeasible ? "passes" : "fails")} the minimum spacing rule.</li>
+        <li class="${Number.isFinite(res.shared.total_USD_per_kW) ? "ok" : "review"}">Shared anchor case ${escapeHtml(Number.isFinite(res.shared.total_USD_per_kW) ? "returned a feasible estimate" : "needs review or is not feasible")}.</li>
+        <li class="ok">Non-shared baseline uses ${escapeHtml(res.anchorsNonShared.toLocaleString())} anchors.</li>
+      </ul>
+    </div>
+  `;
 }
 
 function renderArrayBars(container, res) {
@@ -494,11 +715,11 @@ function renderArrayBars(container, res) {
   const max = Math.max(...rows.map(r => Number.isFinite(r.value) ? r.value : 0), 1);
   container.innerHTML = rows.map(row => `
     <div class="bar-row tall">
-      <span class="bar-label">${row.label}</span>
+      <span class="bar-label">${escapeHtml(row.label)}</span>
       <div class="bar-track">
         <div class="bar-fill" style="width:${Number.isFinite(row.value) ? Math.max(3, 100 * row.value / max) : 0}%; background:${row.color}"></div>
       </div>
-      <span class="bar-value">${formatMoney(row.value, 2)}/kW</span>
+      <span class="bar-value">${escapeHtml(formatMoney(row.value, 2))}/kW</span>
     </div>
   `).join("");
 }
@@ -535,8 +756,15 @@ function runParametric() {
       parametricSoils: SOIL_ORDER.filter(s => s !== "Rock")
     });
     paramRows = rows;
+    lastParamSummary = {
+      variable,
+      rows: rows.length,
+      feasible: rows.filter(row => row.Status === "OK").length
+    };
     setStatus("Parametric study complete.");
+    renderLegend($("#param-legend"), SOIL_ORDER.filter(soil => soil !== "Rock"));
     renderParametricChart($("#param-chart"), rows, variable);
+    renderParametricNote(rows, variable);
     renderTable($("#param-table"), rows, [
       { key: "SweepValue", label: variable, format: v => formatNumber(v, 1) },
       { key: "MooringAngle_deg", label: "Angle", format: v => formatNumber(v, 1) },
@@ -549,6 +777,7 @@ function runParametric() {
       { key: "MooringAnchorLCOE_USD_per_MWh", label: "LCOE", format: v => formatMoney(v, 2) },
       { key: "Status", label: "Status" }
     ], 80);
+    renderReportPreview();
   } catch (error) {
     setStatus(error.message, "bad");
   }
@@ -570,6 +799,15 @@ function renderParametricChart(svg, rows, variable) {
   const yMax = Math.max(...ys) * 1.06;
   const sx = x => pad + (x - xMin) / Math.max(xMax - xMin, 1e-9) * (width - 2 * pad);
   const sy = y => height - pad - (y - yMin) / Math.max(yMax - yMin, 1e-9) * (height - 2 * pad);
+  const addText = (text, x, y, cls, anchor = "middle") => {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    el.textContent = text;
+    el.setAttribute("x", x);
+    el.setAttribute("y", y);
+    el.setAttribute("class", cls);
+    el.setAttribute("text-anchor", anchor);
+    svg.appendChild(el);
+  };
 
   const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   bg.setAttribute("width", width);
@@ -586,7 +824,14 @@ function renderParametricChart(svg, rows, variable) {
     line.setAttribute("y2", y);
     line.setAttribute("class", "grid-line");
     svg.appendChild(line);
+    const value = yMax - i * (yMax - yMin) / 5;
+    addText(formatMoney(value, 0), pad - 8, y + 4, "axis-text", "end");
   }
+
+  addText(`${variable} sweep`, width / 2, height - 10, "axis-title");
+  addText("USD/kW", 12, pad, "axis-title", "start");
+  addText(formatNumber(xMin, 1), pad, height - pad + 22, "axis-text");
+  addText(formatNumber(xMax, 1), width - pad, height - pad + 22, "axis-text");
 
   SOIL_ORDER.filter(s => s !== "Rock").forEach(soil => {
     const group = okRows.filter(r => r.SoilType === soil).sort((a, b) => a.SweepValue - b.SweepValue);
@@ -611,6 +856,19 @@ function renderParametricChart(svg, rows, variable) {
   });
 }
 
+function renderParametricNote(rows, variable) {
+  const note = $("#param-note");
+  if (!note) return;
+  const ok = rows.filter(row => row.Status === "OK" && Number.isFinite(row.TotalCost_USD_per_kW));
+  if (!ok.length) {
+    note.textContent = "No feasible parametric points for the current sweep.";
+    return;
+  }
+  const costs = ok.map(row => row.TotalCost_USD_per_kW);
+  const types = Array.from(new Set(ok.map(row => row.BestAnchorType))).join(", ");
+  note.textContent = `${variable} sweep produced ${ok.length.toLocaleString()} feasible point${ok.length === 1 ? "" : "s"} across ${types}. Cost range: ${formatMoney(Math.min(...costs), 2)}/kW to ${formatMoney(Math.max(...costs), 2)}/kW.`;
+}
+
 async function loadSampleCsv() {
   const response = await fetch("./data/us9_sample.csv");
   const text = await response.text();
@@ -619,13 +877,206 @@ async function loadSampleCsv() {
   setStatus("Sample CSV loaded.");
 }
 
+function renderDecisionError(message) {
+  const summary = $("#decision-summary");
+  const validation = $("#validation-panel");
+  if (summary) {
+    summary.innerHTML = `
+      <h3>Recommended Anchor</h3>
+      <div class="decision-title">
+        <strong>No Result</strong>
+        <span class="status-pill bad">Input Review</span>
+      </div>
+      <p class="decision-detail">${escapeHtml(message)}</p>
+    `;
+  }
+  if (validation) {
+    validation.innerHTML = `
+      <h3>Decision Readiness</h3>
+      <span class="status-pill bad">Needs Input Fix</span>
+      <ul class="validation-list">
+        <li class="bad">${escapeHtml(message)}</li>
+      </ul>
+    `;
+  }
+}
+
+function activateWorkspace(target) {
+  $$(".tab-button").forEach(button => {
+    button.classList.toggle("active", button.dataset.target === target);
+  });
+  $$(".workspace").forEach(panel => {
+    panel.classList.toggle("active", panel.id === target);
+  });
+}
+
+function applyScenario(name) {
+  const scenarios = {
+    baseline: {
+      "mooring-system": "catenary",
+      "mooring-angle": 0,
+      "design-load": 1000,
+      "water-depth": 80,
+      "soil-type": "Medium Clay",
+      "rated-power": 500,
+      "num-lines": 3,
+      "mooring-material": "chain",
+      "compute-lcoe": true
+    },
+    taut: {
+      "mooring-system": "taut",
+      "mooring-angle": 25,
+      "design-load": 1500,
+      "water-depth": 120,
+      "soil-type": "Medium Clay",
+      "rated-power": 1000,
+      "num-lines": 3,
+      "mooring-material": "polyester",
+      "compute-lcoe": true
+    },
+    tlp: {
+      "mooring-system": "tlp",
+      "mooring-angle": 85,
+      "design-load": 1800,
+      "water-depth": 160,
+      "soil-type": "Medium Clay",
+      "rated-power": 1000,
+      "num-lines": 4,
+      "mooring-material": "steel wire",
+      "compute-lcoe": true
+    },
+    array: {
+      "mooring-system": "catenary",
+      "mooring-angle": 0,
+      "design-load": 1000,
+      "water-depth": 80,
+      "soil-type": "Medium Clay",
+      "rated-power": 500,
+      "site-length": 5,
+      "site-width": 3,
+      "device-spacing": 500,
+      "lines-per-device": 3,
+      "compute-shared": true,
+      "compute-lcoe": true
+    }
+  };
+  const scenario = scenarios[name];
+  if (!scenario) return;
+  Object.entries(scenario).forEach(([id, next]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === "checkbox") setInputChecked(id, next);
+    else setInputValue(id, next);
+  });
+  runSite();
+  if (name === "array") {
+    activateWorkspace("array-workspace");
+    runArray();
+  } else {
+    activateWorkspace("site-workspace");
+  }
+  setStatus(`${name[0].toUpperCase()}${name.slice(1)} scenario loaded.`);
+}
+
+function reportFragment() {
+  if (!lastSiteResult) {
+    return `
+      <h3>Executive Report</h3>
+      <p>Run a single-site analysis first, then build the report.</p>
+    `;
+  }
+  const { config: cfg, result: res } = lastSiteResult;
+  const flags = validationFlags(cfg, res);
+  const readiness = decisionReadiness(flags);
+  const topCandidates = res.candidates.slice(0, 5);
+  return `
+    <h3>Anchor Selection Studio Report</h3>
+    <p>Generated ${escapeHtml(new Date().toLocaleString())}. Screening-level comparison for anchor selection, mooring cost, and cost intensity.</p>
+    <h4>Recommendation</h4>
+    <dl>
+      <dt>Best anchor</dt><dd>${escapeHtml(res.best.Type)} - ${escapeHtml(res.best.Variant)}</dd>
+      <dt>Readiness</dt><dd>${escapeHtml(readiness.label)}</dd>
+      <dt>Total system cost</dt><dd>${escapeHtml(formatMoney(res.perDevice.totalSystemCost_USD))}</dd>
+      <dt>Cost intensity</dt><dd>${escapeHtml(formatMoney(res.perDevice.totalCost_USD_per_kW, 2))}/kW</dd>
+      <dt>Anchor mass</dt><dd>${escapeHtml(formatNumber(res.best.Mass_kg / 1000, 2))} t</dd>
+      <dt>Vessel</dt><dd>${escapeHtml(res.best.Vessel)}</dd>
+    </dl>
+    <h4>Design Case</h4>
+    <dl>
+      <dt>Mooring system</dt><dd>${escapeHtml(cfg.mooringSystem)}</dd>
+      <dt>Load and angle</dt><dd>${escapeHtml(formatNumber(cfg.designLoad_kN, 0))} kN at ${escapeHtml(formatNumber(cfg.mooringAngle_deg, 1))} deg</dd>
+      <dt>Water depth</dt><dd>${escapeHtml(formatNumber(cfg.waterDepth_m, 1))} m</dd>
+      <dt>Soil</dt><dd>${escapeHtml(cfg.soilType)}</dd>
+      <dt>Rated power</dt><dd>${escapeHtml(formatNumber(cfg.ratedPowerPerDevice_kW, 0))} kW</dd>
+      <dt>Mooring</dt><dd>${escapeHtml(cfg.numMooringLines)} lines, ${escapeHtml(cfg.mooringMaterial)}</dd>
+    </dl>
+    <h4>Top Candidates</h4>
+    <table>
+      <thead><tr><th>Type</th><th>Variant</th><th>Vessel</th><th>Mass t</th><th>Anchor USD</th></tr></thead>
+      <tbody>
+        ${topCandidates.map(candidate => `
+          <tr>
+            <td>${escapeHtml(candidate.Type)}</td>
+            <td>${escapeHtml(candidate.Variant)}</td>
+            <td>${escapeHtml(candidate.Vessel)}</td>
+            <td>${escapeHtml(formatNumber(candidate.Mass_kg / 1000, 2))}</td>
+            <td>${escapeHtml(formatMoney(candidate.AnchorCost_EUR * cfg.fxUsdPerEur * Math.max(1, Math.round(cfg.numMooringLines))))}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <h4>Workflow Status</h4>
+    <dl>
+      <dt>CSV scan</dt><dd>${escapeHtml(lastCsvSummary ? `${lastCsvSummary.feasible}/${lastCsvSummary.retained} feasible, ${lastCsvSummary.mode}` : "Not run")}</dd>
+      <dt>Array analysis</dt><dd>${escapeHtml(lastArrayResult ? `${lastArrayResult.result.Ndev.toLocaleString()} devices, shared ${lastArrayResult.result.shared.anchorType}` : "Not run")}</dd>
+      <dt>Parametric study</dt><dd>${escapeHtml(lastParamSummary ? `${lastParamSummary.feasible}/${lastParamSummary.rows} feasible points, ${lastParamSummary.variable}` : "Not run")}</dd>
+    </dl>
+    <h4>Validation Notes</h4>
+    <ul class="validation-list">
+      ${flags.map(flag => `<li class="${flag.tone}">${escapeHtml(flag.text)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function reportDocument(fragment) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anchor Selection Studio Report</title>
+  <style>
+    body { margin: 0; padding: 32px; color: #172026; font: 14px/1.5 Arial, sans-serif; background: #f4f7f9; }
+    main { max-width: 960px; margin: 0 auto; padding: 28px; background: #fff; border: 1px solid #d7dde4; border-top: 5px solid #cc0000; }
+    h3 { margin: 0 0 8px; font-size: 24px; }
+    h4 { margin: 24px 0 8px; font-size: 16px; }
+    p { color: #5c6670; }
+    dl { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 8px 14px; }
+    dt { color: #5c6670; font-weight: 700; }
+    dd { margin: 0; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #d7dde4; text-align: left; }
+    th { background: #eef3f6; }
+    .validation-list { display: grid; gap: 7px; padding-left: 18px; }
+  </style>
+</head>
+<body><main>${fragment}</main></body>
+</html>`;
+}
+
+function renderReportPreview() {
+  const preview = $("#report-preview");
+  if (!preview) return;
+  const fragment = reportFragment();
+  lastReportHtml = reportDocument(fragment);
+  preview.innerHTML = fragment;
+}
+
 function setupTabs() {
   $$(".tab-button").forEach(button => {
     button.addEventListener("click", () => {
-      $$(".tab-button").forEach(b => b.classList.remove("active"));
-      $$(".workspace").forEach(p => p.classList.remove("active"));
-      button.classList.add("active");
-      $(`#${button.dataset.target}`).classList.add("active");
+      activateWorkspace(button.dataset.target);
+      if (button.dataset.target === "report-workspace") renderReportPreview();
     });
   });
 }
@@ -638,6 +1089,19 @@ function setup() {
   $("#run-array").addEventListener("click", runArray);
   $("#run-parametric").addEventListener("click", runParametric);
   $("#load-sample").addEventListener("click", loadSampleCsv);
+  $$(".preset-button").forEach(button => {
+    button.addEventListener("click", () => applyScenario(button.dataset.scenario));
+  });
+  $("#build-report").addEventListener("click", () => {
+    if (!lastSiteResult) runSite();
+    renderReportPreview();
+    setStatus("Executive report built.");
+  });
+  $("#download-report").addEventListener("click", () => {
+    if (!lastReportHtml) renderReportPreview();
+    downloadText(`${outPrefix()}_executive_report.html`, lastReportHtml, "text/html");
+    setStatus("Executive report downloaded.");
+  });
   $("#download-csv").addEventListener("click", () => {
     if (!scanRows.length) return setStatus("No CSV scan results to download.", "bad");
     downloadText(`${outPrefix()}_scan_results.csv`, toCsv(scanRows), "text/csv");

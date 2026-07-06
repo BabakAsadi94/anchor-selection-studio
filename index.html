@@ -28,12 +28,24 @@
         <button class="tab-button" data-target="csv-workspace">CSV</button>
         <button class="tab-button" data-target="array-workspace">Array</button>
         <button class="tab-button" data-target="param-workspace">Study</button>
+        <button class="tab-button" data-target="report-workspace">Report</button>
         <button class="tab-button" data-target="guide-workspace">Guide</button>
+        <button class="tab-button" data-target="method-workspace">Method</button>
       </nav>
       <div class="context-help" id="context-help" aria-live="polite">
         <strong>Option Help</strong>
         <span id="help-text">Hover or focus an option to see guidance.</span>
       </div>
+
+      <section class="control-group">
+        <h2>Scenario Presets</h2>
+        <div class="preset-grid">
+          <button class="preset-button" id="scenario-baseline" data-scenario="baseline" type="button">Baseline</button>
+          <button class="preset-button" id="scenario-taut" data-scenario="taut" type="button">Taut</button>
+          <button class="preset-button" id="scenario-tlp" data-scenario="tlp" type="button">TLP</button>
+          <button class="preset-button" id="scenario-array" data-scenario="array" type="button">Array</button>
+        </div>
+      </section>
 
       <section class="control-group">
         <h2>Load Case</h2>
@@ -215,6 +227,29 @@
       </section>
     </aside>
 
+    <section class="command-strip" aria-label="Workflow">
+      <div class="workflow-step">
+        <span>1</span>
+        <strong>Define</strong>
+        <small>Load, depth, soil, mooring</small>
+      </div>
+      <div class="workflow-step">
+        <span>2</span>
+        <strong>Compare</strong>
+        <small>Feasibility, vessel, cost</small>
+      </div>
+      <div class="workflow-step">
+        <span>3</span>
+        <strong>Scale</strong>
+        <small>CSV scan, array, sensitivity</small>
+      </div>
+      <div class="workflow-step">
+        <span>4</span>
+        <strong>Report</strong>
+        <small>Export assumptions and results</small>
+      </div>
+    </section>
+
     <section class="workspace active" id="site-workspace">
       <div class="workspace-head">
         <h2>Single Site</h2>
@@ -223,10 +258,21 @@
           <button id="download-site">Download</button>
         </div>
       </div>
+      <section class="decision-panel">
+        <div id="decision-summary" class="decision-summary"></div>
+        <div id="validation-panel" class="validation-panel"></div>
+      </section>
       <div id="site-metrics" class="metric-grid"></div>
       <section class="panel">
-        <h3>Candidate Cost Ranking</h3>
+        <div class="panel-head">
+          <h3>Candidate Cost Ranking</h3>
+          <div id="candidate-legend" class="legend"></div>
+        </div>
         <div id="candidate-chart" class="bar-chart"></div>
+      </section>
+      <section class="panel">
+        <h3>Per-Device Cost Breakdown</h3>
+        <div id="cost-breakdown" class="breakdown"></div>
       </section>
       <section class="panel">
         <h3>Candidates</h3>
@@ -271,8 +317,12 @@
       <div id="csv-metrics" class="metric-grid"></div>
       <section class="map-layout">
         <div class="panel map-panel">
-          <h3>Map</h3>
+          <div class="panel-head">
+            <h3>Map</h3>
+            <div id="map-legend" class="legend"></div>
+          </div>
           <svg id="map-svg" role="img" aria-label="Anchor result map"></svg>
+          <div id="map-note" class="chart-note"></div>
         </div>
         <div class="panel">
           <h3>Distribution</h3>
@@ -313,6 +363,7 @@
         </div>
       </section>
       <div id="array-metrics" class="metric-grid"></div>
+      <section id="array-readiness" class="decision-panel"></section>
       <section class="panel">
         <h3>Cost Intensity</h3>
         <div id="array-chart" class="bar-chart"></div>
@@ -348,12 +399,33 @@
         </div>
       </section>
       <section class="panel chart-panel">
-        <h3>Cost Intensity Lines</h3>
+        <div class="panel-head">
+          <h3>Cost Intensity Lines</h3>
+          <div id="param-legend" class="legend"></div>
+        </div>
         <svg id="param-chart" role="img" aria-label="Parametric cost chart"></svg>
+        <div id="param-note" class="chart-note"></div>
       </section>
       <section class="panel">
         <h3>Study Results</h3>
         <div id="param-table" class="table-wrap"></div>
+      </section>
+    </section>
+
+    <section class="workspace" id="report-workspace">
+      <div class="workspace-head">
+        <h2>Executive Report</h2>
+        <div class="actions">
+          <button id="build-report" class="primary">Build</button>
+          <button id="download-report">Download HTML</button>
+        </div>
+      </div>
+      <section class="panel report-panel">
+        <div class="report-intro">
+          <strong>Publication-ready screening summary</strong>
+          <p>Build a self-contained report with the current site case, assumptions, candidate ranking, CSV scan status, array economics, sensitivity study, and validation notes.</p>
+        </div>
+        <div id="report-preview" class="report-preview"></div>
       </section>
     </section>
 
@@ -385,6 +457,38 @@
         <article class="guide-card">
           <h3>Engineering Status</h3>
           <p>This is a screening-level JavaScript port of the MATLAB workflow. Final engineering release should compare golden MATLAB cases before certification.</p>
+        </article>
+      </section>
+    </section>
+
+    <section class="workspace" id="method-workspace">
+      <div class="workspace-head">
+        <h2>Methodology & QA</h2>
+      </div>
+      <section class="method-grid">
+        <article class="method-card">
+          <h3>Selection Logic</h3>
+          <p>The selector evaluates gravity, driven pile, suction anchor, drag embedment, and vertical load anchor candidates against soil compatibility, load angle, holding capacity, geometry, and vessel constraints.</p>
+        </article>
+        <article class="method-card">
+          <h3>Cost Model</h3>
+          <p>Per-device economics combine fabrication, installation vessel time, mooring line mass, exchange rate, number of lines, and rated power normalization to USD/kW.</p>
+        </article>
+        <article class="method-card">
+          <h3>Mooring & LCOE</h3>
+          <p>Mooring material, minimum breaking load, line length, fixed charge rate, net capacity factor, and optional OpEx determine the mooring-plus-anchor LCOE contribution.</p>
+        </article>
+        <article class="method-card">
+          <h3>CSV Soil Mapping</h3>
+          <p>Regional scans infer anchor soil class from Gravel, Sand, Mud, Clay, and FolkCde fields, then apply the same single-site selector row by row.</p>
+        </article>
+        <article class="method-card">
+          <h3>Quality Gates</h3>
+          <p>Current automated checks cover soil classes, mooring materials, advanced overrides, CSV scan, array sharing, spacing failure, and parametric sweeps. Golden MATLAB regression remains the final certification step.</p>
+        </article>
+        <article class="method-card">
+          <h3>Responsible Use</h3>
+          <p>Use results for screening, comparison, and research planning. Detailed design should include site investigation, geotechnical review, project-specific installation constraints, and independent engineering validation.</p>
         </article>
       </section>
     </section>

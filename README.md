@@ -32,6 +32,11 @@ http://127.0.0.1:8765/
 - CSV result downloads
 - NC State-branded header and in-app hover/focus guidance
 - Guide tab for workflow, inputs, CSV format, outputs, and validation status
+- Scenario presets for baseline catenary, taut, TLP, and array cases
+- Decision-readiness summary with validation notes and ranking gap
+- Per-device cost breakdown and richer chart legends
+- Methodology & QA workspace for model scope, cost logic, CSV soil mapping, and responsible-use notes
+- Executive report builder with downloadable HTML summary
 - Fully static frontend with no server-side data handling
 
 ## Expected CSV Columns
@@ -95,3 +100,22 @@ Before final engineering release, create golden test cases from MATLAB and compa
 - array shared/non-shared outputs
 
 The app includes the same core formulas and selection rules, but it has not yet been certified against a MATLAB regression suite.
+
+## Public App QA
+
+The repository includes a smoke test suite for the JavaScript engine:
+
+```powershell
+node .\tests\engine-smoke.mjs
+```
+
+Current browser verification covers:
+
+- default single-site analysis
+- scenario preset loading
+- option hover/focus help
+- executive report build
+- CSV sample scan, map legend, and map note
+- array shared/non-shared recommendation
+- parametric study chart legend and note
+- mobile layout with no horizontal overflow
