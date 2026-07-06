@@ -37,8 +37,9 @@ let lastArrayResult = null;
 let lastCsvSummary = null;
 let lastParamSummary = null;
 let lastReportHtml = "";
-let siteRunCount = 0;
 let siteRunButtonTimer = 0;
+let lastSiteSignature = "";
+let siteInputsDirty = false;
 
 const DEFAULT_HELP = "Hover or focus an option to see guidance.";
 
@@ -179,6 +180,10 @@ function runStamp() {
   return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
 
+function siteConfigSignature(cfg = readBaseConfig()) {
+  return JSON.stringify(cfg);
+}
+
 function updateSiteRunFeedback(message, tone = "ok") {
   const feedback = $("#site-run-feedback");
   if (!feedback) return;
@@ -189,30 +194,63 @@ function updateSiteRunFeedback(message, tone = "ok") {
   feedback.dataset.pulse = tone === "ok" ? "true" : "false";
 }
 
-function setSiteRunButtons(text) {
+function setSiteRunButtons(text, disabled = false) {
   ["#run-site", "#run-site-top"].forEach(selector => {
     const button = $(selector);
-    if (button) button.textContent = text;
+    if (button) {
+      button.textContent = text;
+      button.disabled = disabled;
+    }
   });
 }
 
-function markSiteButtonComplete() {
-  setSiteRunButtons("Run complete");
+function resetSiteRunButtons() {
+  const main = $("#run-site");
+  const top = $("#run-site-top");
+  const current = Boolean(lastSiteResult && !siteInputsDirty);
+  if (main) {
+    main.textContent = current ? "Current" : "Run";
+    main.disabled = current;
+  }
+  if (top) {
+    top.textContent = current ? "Current" : "Run Site";
+    top.disabled = current;
+  }
+}
+
+function markSiteButtonState(text, disabled = false) {
+  setSiteRunButtons(text, disabled);
   clearTimeout(siteRunButtonTimer);
   siteRunButtonTimer = window.setTimeout(() => {
-    const main = $("#run-site");
-    const top = $("#run-site-top");
-    if (main) main.textContent = "Run";
-    if (top) top.textContent = "Run Site";
+    resetSiteRunButtons();
   }, 1100);
 }
 
+function markSiteInputsDirty() {
+  if (!lastSiteSignature) return;
+  const changed = siteConfigSignature() !== lastSiteSignature;
+  siteInputsDirty = changed;
+  resetSiteRunButtons();
+  if (changed) {
+    setStatus("Inputs changed. Run Site to update results.");
+    updateSiteRunFeedback("Inputs changed. Run Site to refresh the recommendation and costs.");
+  }
+}
+
 function requestSiteRun() {
+  const signature = siteConfigSignature();
+  if (lastSiteResult && signature === lastSiteSignature && !siteInputsDirty) {
+    const message = `Results already current as of ${runStamp()}. Change an input to create a new result.`;
+    setStatus(message);
+    updateSiteRunFeedback(message);
+    markSiteButtonState("Already current", true);
+    return;
+  }
   clearTimeout(siteRunButtonTimer);
-  setSiteRunButtons("Running...");
+  setSiteRunButtons("Running...", true);
   setStatus("Running single-site analysis...");
   updateSiteRunFeedback("Running single-site analysis with the current inputs.");
-  window.setTimeout(runSite, 0);
+  window.setTimeout(() => runSite("manual"), 0);
 }
 
 function setupHelp() {
@@ -466,18 +504,19 @@ function renderTable(container, rows, columns, limit = 20) {
   `;
 }
 
-function runSite() {
+function runSite(source = "auto") {
   try {
     const cfg = readBaseConfig();
     const res = analyzeSite(cfg);
     lastSiteResult = { config: cfg, result: res };
+    lastSiteSignature = siteConfigSignature(cfg);
+    siteInputsDirty = false;
     const flags = validationFlags(cfg, res);
-    siteRunCount += 1;
     const stamp = runStamp();
-    const runMessage = `Site run #${siteRunCount} complete at ${stamp}.`;
+    const runMessage = source === "manual" ? `Results updated at ${stamp}.` : `Results ready at ${stamp}.`;
     setStatus(runMessage);
     updateSiteRunFeedback(`${runMessage} Best anchor: ${res.best.Type}; total system: ${formatMoney(res.perDevice.totalSystemCost_USD)}.`);
-    markSiteButtonComplete();
+    markSiteButtonState(source === "manual" ? "Updated" : "Current", source !== "manual");
     renderDecisionSummary($("#decision-summary"), res, cfg, flags);
     renderValidation($("#validation-panel"), flags);
     const metrics = [
@@ -512,6 +551,8 @@ function runSite() {
     renderReportPreview();
   } catch (error) {
     renderDecisionError(error.message);
+    siteInputsDirty = true;
+    resetSiteRunButtons();
     updateSiteRunFeedback(`Site run failed at ${runStamp()}: ${error.message}`, "bad");
     setStatus(error.message, "bad");
   }
@@ -1180,7 +1221,11 @@ function setup() {
     $("#csv-file-name").textContent = `${file.name}: ${csvRows.length.toLocaleString()} rows`;
     setStatus("CSV loaded.");
   });
-  $$("#mooring-system, #length-model, #use-mooring").forEach(el => el.addEventListener("change", runSite));
+  $$(".control-panel input, .control-panel select").forEach(el => {
+    if (el.id.startsWith("plot-")) return;
+    el.addEventListener("input", markSiteInputsDirty);
+    el.addEventListener("change", markSiteInputsDirty);
+  });
   $$("#plot-map, #plot-cost, #plot-kw, #plot-box, #plot-soil, #plot-share").forEach(el => el.addEventListener("change", applyPlotToggles));
   runSite();
 }
