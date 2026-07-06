@@ -8,11 +8,17 @@
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <h1>Anchor Selection Studio</h1>
-      <p>Screening model for mooring, anchor type, site scans, arrays, and cost intensity.</p>
+    <div class="brand-block">
+      <img class="ncsu-logo" src="./assets/ncstate-brick-4x1-red.png" alt="NC State University">
+      <div>
+        <h1>Anchor Selection Studio</h1>
+        <p>Public screening workspace for mooring, anchor type, site scans, arrays, and cost intensity.</p>
+      </div>
     </div>
-    <div id="status-line" data-tone="ok">Ready.</div>
+    <div class="header-right">
+      <span class="app-badge">Browser based</span>
+      <div id="status-line" data-tone="ok">Ready.</div>
+    </div>
   </header>
 
   <main class="app-shell">
@@ -22,7 +28,12 @@
         <button class="tab-button" data-target="csv-workspace">CSV</button>
         <button class="tab-button" data-target="array-workspace">Array</button>
         <button class="tab-button" data-target="param-workspace">Study</button>
+        <button class="tab-button" data-target="guide-workspace">Guide</button>
       </nav>
+      <div class="context-help" id="context-help" aria-live="polite">
+        <strong>Option Help</strong>
+        <span id="help-text">Hover or focus an option to see guidance.</span>
+      </div>
 
       <section class="control-group">
         <h2>Load Case</h2>
@@ -345,11 +356,43 @@
         <div id="param-table" class="table-wrap"></div>
       </section>
     </section>
+
+    <section class="workspace" id="guide-workspace">
+      <div class="workspace-head">
+        <h2>Guide</h2>
+      </div>
+      <section class="guide-grid">
+        <article class="guide-card">
+          <h3>Workflow</h3>
+          <p>Start with Site to validate one design point, then move to CSV for regional scans, Array for farm-level anchoring, and Study for sensitivity runs.</p>
+        </article>
+        <article class="guide-card">
+          <h3>Inputs</h3>
+          <p>Load, angle, water depth, soil, mooring geometry, vessel limits, and cost assumptions drive the candidate ranking. Hover any option for field-level guidance.</p>
+        </article>
+        <article class="guide-card">
+          <h3>CSV Columns</h3>
+          <p>Use Latitude, Longitude, WaterDepth, Gravel, Sand, Mud, Clay, and FolkCde. Map scan filters by bounding box; nearest site selects the closest retained row.</p>
+        </article>
+        <article class="guide-card">
+          <h3>Outputs</h3>
+          <p>Results include best feasible anchor, variant, vessel, mass, holding capacity, mooring cost, total system cost, USD/kW, and optional LCOE contribution.</p>
+        </article>
+        <article class="guide-card">
+          <h3>Public Use</h3>
+          <p>The app runs fully in the browser. Uploaded CSV data is parsed locally in the page session and is not sent to a server by this static site.</p>
+        </article>
+        <article class="guide-card">
+          <h3>Engineering Status</h3>
+          <p>This is a screening-level JavaScript port of the MATLAB workflow. Final engineering release should compare golden MATLAB cases before certification.</p>
+        </article>
+      </section>
+    </section>
   </main>
 
   <footer class="app-footer">
     <span>Static browser app. Uploaded CSV data stays local to this session.</span>
-    <span>Screening-level model for early engineering comparison.</span>
+    <span>NC State logo source: <a href="https://brand.ncsu.edu/downloads/" target="_blank" rel="noopener">official brand downloads</a>. Confirm authorization for public institutional use.</span>
   </footer>
 
   <script type="module" src="./js/app.js"></script>

@@ -6,6 +6,9 @@
   --panel: #ffffff;
   --surface: #f4f7f9;
   --surface-strong: #e8eef3;
+  --ncsu-red: #cc0000;
+  --ncsu-red-dark: #990000;
+  --ocean: #0f6b7e;
   --blue: #2978a0;
   --green: #2e9f6e;
   --gold: #caa52d;
@@ -20,7 +23,7 @@
 
 body {
   margin: 0;
-  background: var(--surface);
+  background: linear-gradient(180deg, #f9fbfc 0, #eef4f6 300px, var(--surface) 300px);
   color: var(--ink);
   font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -46,9 +49,14 @@ button:hover {
 }
 
 button.primary {
-  background: var(--blue);
-  border-color: var(--blue);
+  background: var(--ncsu-red);
+  border-color: var(--ncsu-red);
   color: #fff;
+}
+
+button.primary:hover {
+  background: var(--ncsu-red-dark);
+  border-color: var(--ncsu-red-dark);
 }
 
 input,
@@ -65,7 +73,7 @@ select {
 input:focus,
 select:focus,
 button:focus-visible {
-  outline: 2px solid rgba(31, 111, 139, 0.3);
+  outline: 2px solid rgba(204, 0, 0, 0.22);
   outline-offset: 1px;
 }
 
@@ -75,6 +83,14 @@ label {
   color: var(--muted);
   font-size: 12px;
   font-weight: 650;
+}
+
+label.has-help {
+  cursor: help;
+}
+
+label.has-help:hover {
+  color: var(--ocean);
 }
 
 h1,
@@ -107,14 +123,49 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 16px 22px;
+  padding: 18px 24px;
   background: #fff;
+  border-top: 4px solid var(--ncsu-red);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(23, 32, 38, 0.05);
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.ncsu-logo {
+  width: 172px;
+  max-width: 34vw;
+  height: auto;
+  flex: 0 0 auto;
 }
 
 .app-header p {
   margin-top: 5px;
   color: var(--muted);
+}
+
+.header-right {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.app-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #f0c3c3;
+  border-radius: 999px;
+  background: #fff5f5;
+  color: var(--ncsu-red-dark);
+  font-size: 12px;
+  font-weight: 750;
 }
 
 #status-line {
@@ -153,7 +204,7 @@ h3 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 6px;
   background: var(--surface-strong);
@@ -169,8 +220,33 @@ h3 {
 
 .tab-button.active {
   background: #fff;
-  border-color: var(--line);
+  border-color: #f0b7b7;
+  color: var(--ncsu-red-dark);
   box-shadow: 0 1px 5px rgba(23, 32, 38, 0.08);
+}
+
+.context-help {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid #c6dce2;
+  border-left: 4px solid var(--ocean);
+  border-radius: 8px;
+  background: #f4fbfc;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.context-help strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ocean);
+}
+
+.context-help span {
+  color: #42515c;
+  font-size: 13px;
 }
 
 .control-group,
@@ -186,10 +262,12 @@ h3 {
   display: grid;
   gap: 10px;
   padding: 14px;
+  border-top: 3px solid #f1f4f7;
 }
 
 .control-group h2 {
   margin-bottom: 2px;
+  color: #24313a;
 }
 
 .two-col {
@@ -226,6 +304,7 @@ h3 {
   display: none;
   min-width: 0;
   padding: 16px;
+  border-top: 3px solid #edf2f5;
 }
 
 .workspace.active {
@@ -239,6 +318,8 @@ h3 {
   justify-content: space-between;
   gap: 12px;
   min-height: 42px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #edf1f4;
 }
 
 .actions {
@@ -259,9 +340,10 @@ h3 {
   display: grid;
   align-content: center;
   gap: 6px;
-  padding: 12px;
+  padding: 13px 12px;
   background: #f9fbfc;
   border: 1px solid var(--line);
+  border-left: 3px solid #bfd9e0;
   border-radius: 8px;
 }
 
@@ -282,6 +364,7 @@ h3 {
   gap: 12px;
   padding: 14px;
   box-shadow: none;
+  border-top: 3px solid #f1f4f7;
 }
 
 .inputs-panel {
@@ -416,6 +499,35 @@ svg {
   background: #f8fbfc;
 }
 
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guide-card {
+  display: grid;
+  gap: 8px;
+  min-height: 144px;
+  padding: 16px;
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--ocean);
+  border-radius: 8px;
+}
+
+.guide-card:nth-child(2n) {
+  border-top-color: var(--ncsu-red);
+}
+
+.guide-card:nth-child(3n) {
+  border-top-color: var(--green);
+}
+
+.guide-card p {
+  color: var(--muted);
+}
+
 .map-bg {
   fill: #f8fbfc;
 }
@@ -445,6 +557,11 @@ svg {
   margin: 0 auto;
 }
 
+.app-footer a {
+  color: var(--ncsu-red-dark);
+  font-weight: 700;
+}
+
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -461,6 +578,10 @@ svg {
   .map-layout {
     grid-template-columns: 1fr;
   }
+
+  .guide-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -471,10 +592,30 @@ svg {
     flex-direction: column;
   }
 
+  .brand-block {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ncsu-logo {
+    width: 58vw;
+    max-width: 220px;
+  }
+
+  .header-right {
+    justify-items: stretch;
+    width: 100%;
+  }
+
   #status-line {
     min-width: 0;
     max-width: none;
     text-align: left;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .app-shell {
@@ -496,5 +637,9 @@ svg {
   .bar-value {
     grid-column: 2;
     text-align: left;
+  }
+
+  .guide-grid {
+    grid-template-columns: 1fr;
   }
 }

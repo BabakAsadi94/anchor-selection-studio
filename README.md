@@ -30,6 +30,8 @@ http://127.0.0.1:8765/
 - Advanced selector overrides: phi, water density, soil quotient, VLA coefficients, chain diameter, install-time mode, angle tolerance
 - MATLAB-style plot/display toggles and output prefix
 - CSV result downloads
+- NC State-branded header and in-app hover/focus guidance
+- Guide tab for workflow, inputs, CSV format, outputs, and validation status
 - Fully static frontend with no server-side data handling
 
 ## Expected CSV Columns
@@ -45,6 +47,8 @@ anchor-web-app/
   index.html
   styles.css
   serve.py
+  assets/
+    ncstate-brick-4x1-red.png
   data/
     us9_sample.csv
   js/
@@ -55,18 +59,27 @@ anchor-web-app/
 
 ## GitHub Status
 
-`C:\Users\babak\OneDrive\Desktop\Neda` is not currently a Git repository, and no GitHub remote is configured there.
+The web app is published from this repository:
 
-To publish this app later:
-
-```powershell
-cd C:\Users\babak\OneDrive\Desktop\Neda\anchor-web-app
-git init
-git add .
-git commit -m "Create anchor selection web app"
+```text
+https://github.com/BabakAsadi94/anchor-selection-studio
 ```
 
-Then create a GitHub repository and add it as `origin`.
+The public GitHub Pages site is:
+
+```text
+https://babakasadi94.github.io/anchor-selection-studio/
+```
+
+## Brand Asset Note
+
+The NC State logo in `assets/ncstate-brick-4x1-red.png` was downloaded from the official NC State Brand downloads page:
+
+```text
+https://brand.ncsu.edu/downloads/
+```
+
+NC State's brand guidance says those assets are for official university communications, and the logo is a registered trademark. Confirm the appropriate university authorization or trademark permission before using the logo in a public institutional release.
 
 ## Validation Status
 

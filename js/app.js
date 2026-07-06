@@ -34,6 +34,88 @@ let scanRows = [];
 let paramRows = [];
 let lastSiteResult = null;
 
+const DEFAULT_HELP = "Hover or focus an option to see guidance.";
+
+const HELP_TEXT = {
+  "mooring-system": "Select the global mooring behavior. Catenary, taut, and TLP change load angle handling and mooring length assumptions.",
+  "mooring-angle": "Angle between the load and seabed in degrees. Higher angles penalize or exclude anchor types that cannot take vertical load.",
+  "design-load": "Design line load in kN before anchor safety factor is applied.",
+  "water-depth": "Water depth at the site in meters. This affects mooring length, CSV filtering, and cost intensity.",
+  "rated-power": "Rated power per device in kW. Used to normalize system cost to USD/kW and LCOE contribution.",
+  "soil-type": "Dominant seabed class used by the anchor selector. CSV scans infer this from sediment columns.",
+  "site-lat": "Latitude for the single-site run and nearest-site CSV search.",
+  "site-lon": "Longitude for the single-site run and nearest-site CSV search.",
+  "use-mooring": "Include mooring line cost in total system cost. Disable to inspect anchor-only economics.",
+  "include-mooring-ranking": "When enabled, the best anchor is ranked by anchor plus mooring cost. Disable to rank anchor cost only.",
+  "mooring-material": "Material used for mooring cost and mass estimates.",
+  "num-lines": "Number of mooring lines per device for total per-device cost.",
+  "mbl-factor": "Multiplier applied to design load when estimating required minimum breaking load for mooring lines.",
+  "safety-factor": "Anchor safety factor applied to design load when checking required holding capacity.",
+  "length-model": "Depth model estimates line length from water depth; fixed model uses the fixed length field.",
+  "fixed-length": "Mooring length in meters when Length model is set to Fixed.",
+  "cat-factor": "Catenary length multiplier applied to water depth for estimated line length.",
+  "chain-grade": "Cost and capacity multiplier for chain grade assumptions.",
+  "taut-slack": "Taut-line slack multiplier. Values near 1 represent tighter taut mooring geometry.",
+  "taut-min-angle": "Minimum assumed load angle for taut mooring checks.",
+  "fx": "USD per EUR exchange rate used to convert anchor, fabrication, installation, and mooring cost.",
+  "enforce-crane": "When enabled, candidates can be rejected if anchor mass exceeds vessel crane capacity.",
+  "csv-crane": "Crane capacity in tonnes for construction support vessel installation checks.",
+  "ahv-crane": "Crane capacity in tonnes for anchor handling vessel installation checks.",
+  "phi-deg": "Optional friction angle override in degrees. Leave blank to use soil defaults.",
+  "rho-water": "Water density in kg/m3 for calculations that depend on submerged weight.",
+  "chain-diameter": "Nominal chain diameter in millimeters for chain mass and cost assumptions.",
+  "angle-tol": "Tolerance in degrees when checking whether a candidate can handle the requested load angle.",
+  "soil-quotient": "Optional soil strength quotient override. Leave blank to use the selected soil class default.",
+  "use-mid-install": "Use midpoint installation durations from the MATLAB-style install-time ranges.",
+  "vla-coeff-a": "Optional VLA holding-capacity coefficient a. Leave blank to use the built-in default.",
+  "vla-coeff-b": "Optional VLA holding-capacity coefficient b. Leave blank to use the built-in default.",
+  "compute-lcoe": "Calculate mooring and anchoring contribution to LCOE in USD/MWh.",
+  "lcoe-fcr": "Fixed charge rate used for annualizing capital cost in LCOE calculations.",
+  "lcoe-cf": "Net capacity factor used to estimate annual energy production.",
+  "lcoe-opex": "Annual operating cost adder in USD per kW-year for the LCOE contribution.",
+  "out-prefix": "Filename prefix used when downloading site, CSV, or parametric results.",
+  "plot-map": "Show or hide the CSV map-style visualization area.",
+  "plot-cost": "Keep cost-map display enabled for CSV scan views.",
+  "plot-kw": "Keep USD/kW display enabled for CSV scan views.",
+  "plot-box": "Show or hide distribution-style summary plots.",
+  "plot-soil": "Keep soil display enabled for CSV scan views.",
+  "plot-share": "Show or hide cost-share style distribution output.",
+  "run-site": "Run the single-site anchor selection with the current controls.",
+  "download-site": "Download the latest single-site result as JSON.",
+  "csv-file": "Upload a CSV with site coordinates, water depth, and sediment columns. Data stays in this browser session.",
+  "load-sample": "Load the bundled sample CSV so you can test the scan workflow immediately.",
+  "run-csv": "Run the CSV scan using the current filters and shared load-case settings.",
+  "download-csv": "Download the latest CSV scan table as a CSV file.",
+  "csv-source-mode": "Map scan evaluates retained rows; nearest site keeps the closest retained row to the current latitude and longitude.",
+  "bbox-lat-min": "Southern latitude bound for CSV map scan filtering.",
+  "bbox-lat-max": "Northern latitude bound for CSV map scan filtering.",
+  "bbox-lon-min": "Western longitude bound for CSV map scan filtering.",
+  "bbox-lon-max": "Eastern longitude bound for CSV map scan filtering.",
+  "min-depth": "Minimum water depth retained during CSV filtering.",
+  "max-depth": "Maximum water depth retained during CSV filtering.",
+  "max-rows": "Maximum number of CSV rows to retain after filtering. Use smaller values for faster public demos.",
+  "run-array": "Run the farm-level array comparison for non-shared and shared anchoring.",
+  "site-length": "Usable project length in kilometers for estimating array device count.",
+  "site-width": "Usable project width in kilometers for estimating array device count.",
+  "spacing-mode": "User mode uses the spacing field; geometry mode derives spacing from the site footprint.",
+  "device-spacing": "Nominal center-to-center device spacing in meters.",
+  "array-count-model": "Floor counts complete rows and columns. Plus one includes endpoints in the count.",
+  "lines-per-device": "Mooring lines per device used in the array cost comparison.",
+  "compute-shared": "Enable shared anchoring estimates where adjacent devices can share anchor points.",
+  "min-shared-spacing": "Minimum spacing required for shared anchoring. Leave blank to use the device spacing.",
+  "run-parametric": "Run the sensitivity study for the selected variable and range.",
+  "download-parametric": "Download the latest parametric study table as a CSV file.",
+  "param-variable": "Select the variable to sweep: load, angle, depth, or combined load plus angle.",
+  "param-start": "Start value for the primary parametric sweep.",
+  "param-step": "Increment for the primary parametric sweep.",
+  "param-end": "End value for the primary parametric sweep.",
+  "param-angle-start": "Start angle for combined load-angle sweeps.",
+  "param-angle-step": "Angle increment for combined load-angle sweeps.",
+  "param-angle-end": "End angle for combined load-angle sweeps.",
+  "param-baseline-depth": "Water depth used as the baseline when the sweep variable is not water depth.",
+  "param-max-points": "Maximum sampled points per sweep to keep charts responsive in the browser."
+};
+
 function value(id) {
   return $(`#${id}`)?.value;
 }
@@ -58,6 +140,44 @@ function setStatus(message, tone = "ok") {
   const el = $("#status-line");
   el.textContent = message;
   el.dataset.tone = tone;
+}
+
+function setupHelp() {
+  const helpText = $("#help-text");
+  const showHelp = text => {
+    if (helpText) helpText.textContent = text;
+  };
+  const resetHelp = () => {
+    if (helpText) helpText.textContent = DEFAULT_HELP;
+  };
+
+  Object.entries(HELP_TEXT).forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const label = el.closest("label");
+    const show = () => showHelp(text);
+    el.title = text;
+    el.setAttribute("aria-describedby", "context-help");
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("focus", show);
+    el.addEventListener("focusin", show);
+    el.addEventListener("click", show);
+    el.addEventListener("input", show);
+    el.addEventListener("mouseleave", () => {
+      if (!label || !label.matches(":hover")) resetHelp();
+    });
+    el.addEventListener("blur", resetHelp);
+
+    if (label) {
+      label.classList.add("has-help");
+      label.title = text;
+      label.addEventListener("mouseenter", show);
+      label.addEventListener("focusin", show);
+      label.addEventListener("click", show);
+      label.addEventListener("mouseleave", resetHelp);
+      label.addEventListener("focusout", resetHelp);
+    }
+  });
 }
 
 function readBaseConfig() {
@@ -512,6 +632,7 @@ function setupTabs() {
 
 function setup() {
   setupTabs();
+  setupHelp();
   $("#run-site").addEventListener("click", runSite);
   $("#run-csv").addEventListener("click", runCsvScan);
   $("#run-array").addEventListener("click", runArray);
